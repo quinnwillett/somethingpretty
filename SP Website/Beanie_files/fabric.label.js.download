@@ -1,0 +1,66 @@
+/**
+ * Add label to Fabric canvas
+ */
+function fabricLabel(canvas, position, labelText) {
+
+    var label,
+        viewportTransform,
+        zoom = 1;
+
+    function initLabel () {
+        label = $('<div class="canvas-label"></div>');
+        label.text(labelText);
+        label.css({
+            width: position.width - 2 + 'px',
+            top: position.top + position.height + 2 + 'px',
+            left: position.left + 1 + 'px',
+            bottom: 'auto',
+        });
+        label.hide();
+        $(canvas.wrapperEl).append(label);
+    }
+
+    initLabel();
+
+    /**
+     * @param {Event} e
+     */
+    function showLabel (e) {
+        /** @type {fabric.Object} obj **/
+        var obj = canvas.getActiveObject();
+        if (obj) {
+            calculateLabelPosition();
+            label.show();
+        } else {
+            label.hide();
+        }
+    }
+
+    /**
+     * Reposition label, keeping in mind that print area may be zoomed-in
+     */
+    function calculateLabelPosition() {
+        viewportTransform = canvas.viewportTransform;
+        zoom = canvas.getZoom();
+
+        var point = fabric.util.transformPoint(new fabric.Point(position.left, position.top + position.height), viewportTransform);
+        label.css({
+            width: position.width * zoom - 2 + 'px',
+            left: point.x + 1 + 'px',
+            top: point.y + 2 + 'px',
+        });
+    }
+
+    /**
+     * @param {Event} e
+     */
+    function hideLabel (e) {
+        label.hide();
+    }
+
+    canvas.on({
+        'mouse:down': showLabel,
+        'mouse:up': hideLabel,
+    });
+
+}

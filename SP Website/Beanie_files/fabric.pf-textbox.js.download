@@ -1,0 +1,943 @@
+(function () {
+
+    const FILL = 0;        // const to indicate filltext render
+    const STROKE = 1;
+    var renderType = FILL; // used internal to set fill or stroke text
+
+    /**
+     * Draw single char in the arc. Called from circleText function. Return new a value after the char is rendered on the ctx
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {String} _char - character to render on the context. In case of charSpacing, _char === ''
+     * @param {number} x position of circle center
+     * @param {number} y position of circle center
+     * @param {number} radius of circle in pixels
+     * @param {number} angle - angle in witch current chara needs to be rendered
+     * @param {number} pA - angular size of a pixel in radians
+     * @param {number} wScale - width scale value
+     * @param {number|null} measuredWidth - measured width for the rendered _char. In case of charSpacing, this is the spacing between chars
+     * @return {number}
+     */
+    var drawCircleChar = function (ctx, _char, x, y, radius, angle, pA, wScale, measuredWidth) {
+        var mWidth = measuredWidth || ctx.measureText(_char).width;
+        var aw = mWidth * pA; // get the angular width of the text
+        var xDx = Math.cos(angle + aw / 2); // get the yAxies vector from the center x,y out
+        var xDy = Math.sin(angle + aw / 2);
+
+        ctx.save();
+        // ctx.textBaseline = 'middle';
+        // if (xDy < 0) { // is the text upside down. If it is flip it
+        ctx.transform(-xDy * wScale, xDx * wScale, -xDx, -xDy, xDx * radius + x, xDy * radius + y);
+        // } else {
+        //     ctx.transform(-xDy * wScale, xDx * wScale, xDx, xDy, xDx * radius + x, xDy * radius + y);
+        // }
+
+        if (renderType === FILL) {
+            ctx.fillText(_char, 0, 0); // render the character
+        } else {
+            ctx.strokeText(_char, 0, 0); // render the character
+        }
+        ctx.restore();
+
+        angle += aw; // step to the next angle
+
+        return angle;
+    };
+
+    /**
+     * Main function to draw a circular text
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {String} text
+     * @param {number} x position of circle center
+     * @param {number} y position of circle center
+     * @param {number} radius of circle in pixels
+     * @param {number} charSpacing - charSpacing value from fabric.js
+     * @param {number} start - angle in radians to start.
+     * @param {number} [end] - if included text align is ignored and the text is scaled to fit between start and end;
+     * @param {Boolean} [forward] - default true. if true text direction is forwards, if false  direction is backward
+
+     */
+    var circleText = function (ctx, text, x, y, radius, charSpacing, start, end, forward) {
+        var i, textWidth, pA, pAS, angle, wScale, alignment, dir;
+        if (forward === undefined) {
+            forward = true;
+        }
+        if (text.trim() === '' || ctx.globalAlpha === 0) { // dont render empty string or transparent
+            return;
+        }
+        if (isNaN(x) || isNaN(y) || isNaN(radius) || isNaN(start) || (end !== undefined && end !== null && isNaN(end))) { //
+            console.error(x, y, radius, start, end);
+            throw TypeError('circle text arguments requires a number for x,y, radius, start, and end.');
+        }
+        alignment = ctx.textAlign; // save the current textAlign so that it can be restored at end
+        // dir = forward ? 1 : forward === false ? -1 : 1; // set dir if not true or false set forward as true
+        dir = forward ? -1 : 1; // set dir if not true or false set forward as true
+        pAS = 1 / radius; // get the angular size of a pixel in radians
+        textWidth = ctx.measureText(text).width + charSpacing * (text.length - 1) / 10; // get the width of all the text
+        if (end !== undefined && end !== null) { // if end is supplied then fit text between start and end
+            pA = ((end - start) / textWidth) * dir;
+            wScale = (pA / pAS) * dir;
+        } else { // if no end is supplied correct start and end for alignment
+            pA = -pAS * dir;
+            wScale = -1 * dir;
+            switch (alignment) {
+                case 'center': // if centered move around half width
+                    start -= (pA * textWidth) / 2;
+                    end = start + pA * textWidth;
+                    break;
+                case 'right': // intentionally falls through to case "end"
+                case 'end':
+                    end = start;
+                    start -= pA * textWidth;
+                    break;
+                case 'left': // intentionally falls through to case "start"
+                case 'start':
+                    end = start + pA * textWidth;
+            }
+        }
+
+        ctx.textAlign = 'center'; // align for rendering
+        angle = start; // set the start angle
+        for (var i = 0; i < text.length; i += 1) { // for each character
+            angle = drawCircleChar(ctx, text[i], x, y, radius, angle, pA, wScale);
+            if (charSpacing && i + 1 < text.length) {
+                var spacing = charSpacing / 10;
+                angle = drawCircleChar(ctx, '', x, y, radius, angle, pA, wScale, spacing); // render char spacing
+            }
+        }
+        ctx.textAlign = alignment; // restore the text alignment
+    };
+
+    /**
+     * draw fill for circulat text external function
+     * @param {String} text
+     * @param {number} x position of circle center
+     * @param {number} y position of circle center
+     * @param {number} radius of circle in pixels
+     * @param {number} charSpacing - charSpacing value from fabric.js
+     * @param {number} start - angle in radians to start.
+     * @param {number} [end] - if included text align is ignored and the text is scaled to fit between start and end;
+     * @param {Boolean} [forward] - default true. if true text direction is forwards, if false  direction is backward
+     */
+    var fillCircleText = function (text, x, y, radius, charSpacing, start, end, forward) {
+        renderType = FILL;
+        circleText(this, text, x, y, radius, charSpacing, start, end, forward);
+    };
+
+    /**
+     * Draw stroke for circular text external function
+     * @param {String} text
+     * @param {number} x position of circle center
+     * @param {number} y position of circle center
+     * @param {number} radius of circle in pixels
+     * @param {number} charSpacing - charSpacing value from fabric.js
+     * @param {number} start - angle in radians to start.
+     * @param {number} [end] - if included text align is ignored and the text is scaled to fit between start and end;
+     * @param {Boolean} [forward] - default true. if true text direction is forwards, if false  direction is backward
+     */
+    var strokeCircleText = function (text, x, y, radius, charSpacing, start, end, forward) {
+        renderType = STROKE;
+        circleText(this, text, x, y, radius, charSpacing, start, end, forward);
+    };
+
+    // set the prototypes
+    CanvasRenderingContext2D.prototype.fillCircleText = fillCircleText;
+    CanvasRenderingContext2D.prototype.strokeCircleText = strokeCircleText;
+
+    /**
+     * PFTextbox class, based on Text, allows the user to create a text with double
+     * stroke and shadow inside one bounding box.
+     * @class fabric.PFTextbox
+     * @extends fabric.Text
+     * @mixes fabric.Observable
+     * @return {fabric.PFTextbox} thisArg
+     */
+    fabric.PFTextbox = fabric.util.createClass(fabric.Text, {
+
+        /**
+         * Type of an object
+         * @type String
+         * @default
+         */
+        type: 'pf-textbox',
+
+        /**
+         * @type Number
+         * @default
+         */
+        shadowOffsetX: 0,
+
+        /**
+         * @type Number
+         * @default
+         */
+        shadowOffsetY: 0,
+
+        /**
+         * Default shadow color
+         * @type Number
+         * @default
+         */
+        shadowColor: '#3ee',
+
+        /**
+         * Text inner stroke width
+         * @type Number
+         * @default
+         */
+        strokeOffset: 0,
+
+        /**
+         * Color for text inner stroke
+         * @type Number
+         * @default
+         */
+        strokeOffsetColor: '#fff',
+
+        /**
+         * If layer is customizable, this is the total max width for the text
+         * @type Number
+         * @default
+         */
+        customizedWidth: 0,
+
+        /**
+         * Scales text line font to a given height, with respect to first line height (scaling by x/y equally)
+         * @param {Number} value New text line font height value
+         * @return {fabric.Object} thisArg
+         * @chainable
+         */
+        scaleTextLineToHeight: function (value) {
+            return this.scale(value * this._fontSizeMult / this.getHeightOfLine(0));
+        },
+
+        /**
+         * Render PFTextbox
+         * @private
+         * @param {CanvasRenderingContext2D} ctx Context to render on
+         */
+        _render: function (ctx) {
+            this._setTextStyles(ctx);
+            this._renderTextLinesBackground(ctx);
+            this._renderTextDecoration(ctx, 'underline');
+            this._renderText(ctx);
+            this._renderTextDecoration(ctx, 'overline');
+            this._renderTextDecoration(ctx, 'linethrough');
+        },
+
+        /**
+         * Render text with double stroke
+         * @private
+         * @param {CanvasRenderingContext2D} ctx Context to render on
+         */
+        _renderText: function (ctx) {
+            this._renderTextStroke(ctx);
+            this._renderTextOffset(ctx);
+            this._renderTextFill(ctx);
+        },
+
+        /**
+         * Render offset (inner) stroke
+         * @private
+         * @param {CanvasRenderingContext2D} ctx Context to render on
+         */
+        _renderTextOffset: function (ctx) {
+            if ((!this.strokeOffsetColor || this.strokeOffset === 0) && this.isEmptyStyles()) {
+                return;
+            }
+
+            if (this.shadow && !this.shadow.affectStroke) {
+                this._removeShadow(ctx);
+            }
+
+            ctx.save();
+            this._setLineDash(ctx, this.strokeDashArray);
+            ctx.beginPath();
+            this._renderTextCommon(ctx, 'strokeOffsetText');
+            ctx.closePath();
+            ctx.restore();
+        },
+
+        /**
+         * Creates StaticCanvas instance for PFTextbox object dimension calculation
+         * Returns object with SVG string, SVG positions in created StaticCanvas object, width, height and scaling information
+         *
+         * @param {PFSVG.Layer} layerRaw
+         * @param {Boolean} [skipSvg]
+         * @return {{
+         * svgString: String,
+         * scaleBackRatio: Number,
+         * svgDimensions: {top: number, left: number, width: number, height: number},
+         * width: number,
+         * height: number}}
+         */
+        getCustomSvgProperties: function (layerRaw, skipSvg) {
+            var clone = fabric.util.object.clone(this);
+            var strokeWidth = clone.strokeWidth; // remove stroke to get clear font size
+            clone.strokeWidth = 0;
+            var savedHeight = clone.getScaledHeight(); // save height when not scaled
+            clone.strokeWidth = strokeWidth; // set back stroke for svg
+            var originalScaleX = clone.scaleX;
+            clone.scaleTextLineToHeight(layerRaw.size); // scale to desired height for layer data
+            var newScaleX = clone.scaleX;
+            clone.scaleToHeight(savedHeight); // scale back to original height
+            var scaleBackRatio = newScaleX / originalScaleX * clone.lineHeight;
+
+            // calculate dimensions start
+            var canvas = this.createTextDimensionCanvasAddObject(clone);
+            var ctx = canvas.getContext();
+            ctx.lineJoin = this.strokeLineJoin;
+            var imageData = ctx.getImageData(0, 0, parseInt(canvas.width), parseInt(canvas.height)).data;
+
+            var cacheKey = PF.CANVAS.getTextObjDimensionsCacheKey(layerRaw); // use dimension values caching
+            var dimensions = PF.CANVAS.CUSTOM_DIMENSIONS_CACHE[cacheKey]
+                || this._getTextDimensionsFromImage(imageData, parseInt(canvas.width), parseInt(canvas.height));
+
+            if (!PF.CANVAS.CUSTOM_DIMENSIONS_CACHE[cacheKey]) {
+                PF.CANVAS.CUSTOM_DIMENSIONS_CACHE[cacheKey] = Object.assign({}, dimensions); // save calculated values in cache
+            }
+            // calculate dimensions end
+
+            var svgString = '';
+            if (!skipSvg) {
+                svgString = canvas.toSVG({
+                    suppressPreamble: true,
+                    viewBox: {
+                        x: dimensions.left,
+                        y: dimensions.top,
+                        width: dimensions.width,
+                        height: dimensions.height,
+                    },
+                    width: dimensions.width,
+                    height: dimensions.height,
+                });
+            }
+
+            // console.log(svgString);
+            // var placeholder = document.createElement('div');
+            // placeholder.innerHTML = svgString;
+            // var svgNode = placeholder.firstElementChild;
+            // document.body.append(svgNode);
+            // console.log(canvas.toDataURL());
+            // document.body.appendChild(canvas.getElement());
+
+            canvas._objects = [];
+            canvas.dispose();
+            canvas = null;
+
+            return {
+                svgDimensions: dimensions,
+                width: dimensions.width * scaleBackRatio,
+                height: dimensions.height * scaleBackRatio,
+                svgString: svgString,
+                scaleBackRatio: scaleBackRatio,
+            };
+        },
+
+        /**
+         * Calculates image position and dimensions in given imageData array
+         *
+         * @param {ImageData} imageData
+         * @param {Number} width
+         * @param {Number} height
+         * @return {{top: number, left: number, width: number, height: number}}
+         * @private
+         */
+        _getTextDimensionsFromImage: function (imageData, width, height) {
+            var minX = null, minY = null, maxX = null, maxY = null,
+                alpha, x, y;
+            for (y = 0; y < height && minY === null; y++) {
+                for (x = 0; x < width; x++) {
+                    alpha = imageData[(y * width + x) * 4 + 3];
+                    if (alpha > 0) {
+                        minY = y;
+                        break;
+                    }
+                }
+            }
+            for (x = 0; x < width && minX === null; x++) {
+                for (y = minY; y < height; y++) {
+                    alpha = imageData[(y * width + x) * 4 + 3];
+                    if (alpha > 0) {
+                        minX = x;
+                        break;
+                    }
+                }
+            }
+            for (y = parseInt(height); y >= minY && maxY === null; y--) {
+                for (x = parseInt(width); x >= minX; x--) {
+                    alpha = imageData[(y * width + x) * 4 + 3];
+                    if (alpha > 0) {
+                        maxY = y;
+                        break;
+                    }
+                }
+            }
+            for (x = parseInt(width); x >= minX && maxX === null; x--) {
+                for (y = parseInt(height); y >= minY; y--) {
+                    alpha = imageData[(y * width + x) * 4 + 3];
+                    if (alpha > 0) {
+                        maxX = x;
+                        break;
+                    }
+                }
+            }
+            if (minX === null || minY === null || maxX === null || maxY === null) {
+                console.warn('Could not get dimensions: minX ', minX, ', minY', minY, ', maxX',  maxX,', maxY', maxY, 'width', width, 'height', height);
+                return {
+                    left: 0,
+                    top: 0,
+                    width: width,
+                    height: height
+                };
+            }
+
+            return {
+                left: minX,
+                top: minY,
+                width: maxX - minX,
+                height: maxY - minY
+            };
+        },
+
+        /**
+         * Calculate arcRadius and new dimension/position values for text object with arc
+         */
+        calcArcDimensions: function () {
+            this.arcAngle *= 1; // convert to number, because there can be cases when it is a string
+            if (!this.arcAngle) {
+                this.arcRadius = null;
+                return;
+            }
+
+            if (this.text.length > 1) {
+                this.arcRadius = this.getAdvancedArcRadius();
+                this.prevWidth = this.width;
+                this.prevHeight = this.height;
+                this.height = this._arcGetApproxHeight();
+                this.width = this._arcGetApproxWidth();
+            }
+        },
+
+        /**
+         * Calculate radius for given width of line
+         * @param widthOfLine
+         * @return {number}
+         */
+        calcArcRadius: function (widthOfLine) {
+            return (widthOfLine * 180) / (Math.PI * this.arcAngle);
+        },
+
+        /**
+         * Calculate and get advanced arc radius.
+         * Do this by calculating approx. width of the text. In case of multiple lines, measure first line if negative angle, measure last line in case of positive angle
+         */
+        getAdvancedArcRadius: function () {
+            if (this._textLines.length === 1) {
+                return this.calcArcRadius(this.width);
+            }
+            var lineIdx = 0, // start from second line
+                incrementBy = 1,
+                multiplyBy = -1,
+                radius,
+                perimeter, currLineWidth;
+
+            if (this.arcAngle > 0) {
+                lineIdx = this._textLines.length - 1; // start from second line
+                incrementBy = -1;
+                multiplyBy = 1;
+            }
+            var finalWidth = this.measureLine(lineIdx).width,
+                finalRadius = this.calcArcRadius(finalWidth),
+                lineIdxMultiplier;
+
+            lineIdx += incrementBy;
+
+            while (lineIdx >= 0 && lineIdx < this._textLines.length) {
+                currLineWidth = this.measureLine(lineIdx).width;
+                lineIdxMultiplier = this.arcAngle < 0 ?
+                    lineIdx * multiplyBy :
+                    (this._textLines.length - 1 - lineIdx) * multiplyBy;
+
+                radius = finalRadius + this.getHeightOfLine(lineIdx) * lineIdxMultiplier;
+                perimeter = 2 * Math.PI * radius;
+                if (currLineWidth > Math.abs(perimeter)) {
+                    finalWidth = currLineWidth;
+                    finalRadius = this.calcArcRadius(finalWidth) - (this.getHeightOfLine(lineIdx) * lineIdxMultiplier);
+                }
+                lineIdx += incrementBy;
+            }
+
+            return finalRadius;
+        },
+
+        /**
+         * Creates StaticCanvas based on given object dimensions
+         * positions given object in center of canvas
+         *
+         * @param {fabric.PFTextbox} object
+         * @return {fabric.StaticCanvas}
+         * @private
+         */
+        createTextDimensionCanvasAddObject: function (object) {
+            var isArc = object.arcAngle && object.text.length > 1;
+            var strokeMultiplier = isArc ? 1 : 1 + object.strokeWidth / PF.CANVAS.FONT_SIZE_MULTIPLIER; // in case of arc, there is no need for stroke multiplier
+            var multiplier = isArc ? 1.75 : 2; // in case of arc, static canvas can be a bit smaller
+            var height = parseInt(object.height * multiplier * strokeMultiplier), // make canvas 2 [multiplier] times bigger than approximate bounding box
+                width = parseInt(object.width * multiplier * strokeMultiplier), // make canvas 2 [multiplier] times bigger than approximate bounding box
+                canvas = new fabric.StaticCanvas(null, {
+                    enableRetinaScaling: false,
+                    renderOnAddRemove: false,
+                    skipOffscreen: false,
+                    width: width,
+                    height: height,
+                });
+            object.objectCaching = false; // important to turn catching off, because parts of the object can be cut-off
+            if (isArc) {
+                var objTop = object._arcGetApproxTop(canvas.height);
+                object.set({
+                    top: objTop,
+                    left: canvas.width / 2,
+                    originX: 'center',
+                    originY: 'center',
+                });
+            } else {
+                object.set({ // position object in approximate center
+                    top: canvas.height / 4,
+                    left: canvas.width / 4,
+                });
+            }
+            canvas.add(object);
+            canvas.renderAll();
+
+            return canvas;
+        },
+
+        /**
+         * Calculate approximate height for the curved text.
+         * Used to figure out the needed dimensions of the StaticCanvas when calculating bounding box for text object
+         * @return {number}
+         * @private
+         */
+        _arcGetApproxHeight: function () {
+            var absHalfAngle = Math.abs(this.arcAngle) / 2;
+            var absRadius = Math.abs(this.arcRadius);
+            var alpha = absHalfAngle % 90;
+            if (absHalfAngle === 180) {
+                return (absRadius + this.prevHeight) * 2;
+            } else if (absHalfAngle < 90) {
+                return absRadius + this.prevHeight - absRadius * Math.cos(fabric.util.degreesToRadians(alpha));
+            } else {
+                return absRadius + this.prevHeight + (absRadius + this.prevHeight) * Math.sin(fabric.util.degreesToRadians(alpha));
+            }
+        },
+
+        /**
+         * Calculate approximate width for the curved text.
+         * Used to figure out the needed dimensions of the StaticCanvas when calculating bounding box for text object
+         * @return {number}
+         * @private
+         */
+        _arcGetApproxWidth: function () {
+            var absHalfAngle = Math.abs(this.arcAngle) / 2;
+            var absRadius = Math.abs(this.arcRadius);
+            var retVal;
+            if (absHalfAngle < 90) {
+                retVal = (absRadius + this.prevHeight) * Math.sin(fabric.util.degreesToRadians(absHalfAngle)) * 2;
+            } else {
+                retVal = (absRadius + this.prevHeight) * 2;
+            }
+            if (absHalfAngle < 25 && retVal < this.prevWidth) {
+                retVal = this.prevWidth;
+            }
+
+            return retVal;
+        },
+
+        /**
+         * Calculate approximate top value for curved text to position it in the center of StaticCanvas.
+         * Used to figure out the needed dimensions of the StaticCanvas when calculating bounding box for text object
+         * @param {number} canvasHeight
+         * @return {number}
+         * @private
+         */
+        _arcGetApproxTop: function (canvasHeight) {
+            var absRadius = Math.abs(this.arcRadius);
+            if (this.arcAngle > 0) {
+                return absRadius + canvasHeight / 2; // strange, but somehow this formula can center text in staticCanvas better than formula below
+                // return absRadius + this.prevHeight + (canvasHeight - this.height) / 2;
+            } else {
+                return -(absRadius + this.prevHeight) + this.height + this.prevHeight / 2 + (canvasHeight - this.height) / 2;
+            }
+        },
+
+        /**
+         * Returns object representation of an instance
+         * @method toObject
+         * @param {Array} [propertiesToInclude] Any properties that you might want to additionally include in the output
+         * @return {Object} object representation of an instance
+         */
+        toObject: function (propertiesToInclude) {
+            return this.callSuper('toObject', ['shadowOffsetX', 'shadowOffsetY', 'shadowColor', 'strokeOffset', 'strokeColor', 'strokeOffsetColor'].concat(propertiesToInclude));
+        },
+
+        /* _TO_SVG_START_ */
+        /**
+         * Adds logic to create SVG text objects for text, stroke, stroke offset
+         * (consists of 3 SVG text objects if they have parameters)
+         *
+         * @private
+         */
+        _wrapSVGTextAndBg: function (textAndBg) {
+            var noShadow = true,
+                textDecoration = this.getSvgTextDecoration(this),
+                textStyle = this.getSvgStyles(noShadow),
+                textStyleArr = textStyle.split(';'),
+                returnArr = [textAndBg.textBgRects.join('')];
+
+            if (this.stroke && this.strokeWidth) {
+                this._addStyledTextToArray(returnArr, textDecoration, textStyle, textAndBg.textSpans.join(''));
+
+                if (this.strokeOffsetColor && this.strokeOffset) {
+                    var offsetArr = [];
+                    textStyleArr.forEach(function (value) {
+                            if (value.indexOf('stroke:') >= 0) {
+                                value = 'stroke: ' + this.strokeOffsetColor;
+                            } else if (value.indexOf('stroke-width:') >= 0) {
+                                value = 'stroke-width: ' + this.strokeOffset;
+                            }
+                            offsetArr.push(value);
+                        }.bind(this)
+                    );
+
+                    this._addStyledTextToArray(returnArr, textDecoration, offsetArr.join(';'), textAndBg.textSpans.join(''));
+                }
+            }
+
+            var textArr = [];
+            textStyleArr.forEach(function (value) {
+                    if (value.indexOf('stroke') == -1) {
+                        textArr.push(value);
+                    }
+                }
+            );
+
+            this._addStyledTextToArray(returnArr, textDecoration, textArr.join(';'), textAndBg.textSpans.join(''));
+
+            return returnArr;
+        },
+
+        /**
+         * Adds additional svg information to 'arrayWithTexts' array
+         *
+         * @param {Array} arrayWithTexts
+         * @param {String} textDecoration
+         * @param {String} textStyles
+         * @param {String} textSpans
+         * @private
+         */
+        _addStyledTextToArray: function (arrayWithTexts, textDecoration, textStyles, textSpans) {
+            arrayWithTexts.push(
+                '\t\t<text xml:space="preserve" ',
+                (this.fontFamily ? 'font-family="' + this.fontFamily.replace(/"/g, '\'') + '" ' : ''),
+                (this.fontSize ? 'font-size="' + this.fontSize + '" ' : ''),
+                (this.fontStyle ? 'font-style="' + this.fontStyle + '" ' : ''),
+                (this.fontWeight ? 'font-weight="' + this.fontWeight + '" ' : ''),
+                (textDecoration ? 'text-decoration="' + textDecoration + '" ' : ''),
+                'style="', textStyles, '"', this.addPaintOrder(), ' >',
+                textSpans,
+                '</text>\n');
+        }
+        /* _TO_SVG_END_ */
+    });
+
+    /**
+     * Override _renderTextCommon method of fabric.js text obj.
+     * Add 'strokeOffsetText'
+     * @private
+     * @param {CanvasRenderingContext2D} ctx Context to render on
+     * @param {String} method Method name ("fillText" or "strokeText")
+     * @param {boolean} isPFShadow
+     */
+    fabric.PFTextbox.prototype._renderTextCommon = function (ctx, method) {
+        ctx.save();
+        var lineHeights = 0, left = this._getLeftOffset(), top = this._getTopOffset(),
+            offsets = this._applyPatternGradientTransform(ctx, method === 'fillText' ? this.fill : method === 'strokeOffsetText' ? this.strokeOffsetColor : this.stroke);
+
+        if (this._isPFShadowRender) {
+            left += this.shadowTemp.offsetX / this.scaleX;
+            top += this.shadowTemp.offsetY / this.scaleY;
+        }
+
+        for (var i = 0, len = this._textLines.length; i < len; i++) {
+            var heightOfLine = this.getHeightOfLine(i),
+                maxHeight = heightOfLine / this.lineHeight,
+                leftOffset = this._getLineLeftOffset(i);
+            this._renderTextLine(
+                method,
+                ctx,
+                this._textLines[i],
+                left + leftOffset - offsets.offsetX,
+                top + lineHeights + maxHeight - offsets.offsetY,
+                i
+            );
+            lineHeights += heightOfLine;
+        }
+        ctx.restore();
+    };
+
+    /**
+     * Override _renderChars method of fabric.js text obj.
+     * Add logic to render curved (arc) text.
+     * Use shortCut in case of defined nonzero char spacing and arc used. Handle the char spacing rendering in the circleText function
+     * @private
+     * @param {String} method
+     * @param {CanvasRenderingContext2D} ctx Context to render on
+     * @param {String} line Content of the line
+     * @param {Number} left
+     * @param {Number} top
+     * @param {Number} lineIndex
+     * @param {Number} charOffset
+     */
+    fabric.PFTextbox.prototype._renderChars = function (method, ctx, line, left, top, lineIndex) {
+        // set proper line offset
+        this.isArc = this.arcAngle && this.arcRadius;
+        var lineHeight = this.getHeightOfLine(lineIndex),
+            isJustify = this.textAlign.indexOf('justify') !== -1,
+            actualStyle,
+            nextStyle,
+            charsToRender = '',
+            charBox,
+            boxWidth = 0,
+            timeToRender,
+            shortCut = !isJustify && (this.charSpacing === 0 || this.isArc) && this.isEmptyStyles(lineIndex);
+
+        ctx.save();
+        top -= lineHeight * this._fontSizeFraction / this.lineHeight;
+        if (shortCut) {
+            // render all the line in one pass without checking
+            this._renderChar(method, ctx, lineIndex, 0, this.textLines[lineIndex], left, top, lineHeight);
+            ctx.restore();
+            return;
+        }
+        for (var i = 0, len = line.length - 1; i <= len; i++) {
+            timeToRender = i === len || this.charSpacing;
+            charsToRender += line[i];
+            charBox = this.__charBounds[lineIndex][i];
+            if (boxWidth === 0) {
+                left += charBox.kernedWidth - charBox.width;
+                boxWidth += charBox.width;
+            } else {
+                boxWidth += charBox.kernedWidth;
+            }
+            if (isJustify && !timeToRender) {
+                if (this._reSpaceAndTab.test(line[i])) {
+                    timeToRender = true;
+                }
+            }
+            if (!timeToRender) {
+                // if we have charSpacing, we render char by char
+                actualStyle = actualStyle || this.getCompleteStyleDeclaration(lineIndex, i);
+                nextStyle = this.getCompleteStyleDeclaration(lineIndex, i + 1);
+                timeToRender = this._hasStyleChanged(actualStyle, nextStyle);
+            }
+            if (timeToRender) {
+                this._renderChar(method, ctx, lineIndex, i, charsToRender, left, top, lineHeight);
+                charsToRender = '';
+                actualStyle = nextStyle;
+                left += boxWidth;
+                boxWidth = 0;
+            }
+        }
+        ctx.restore();
+    };
+
+    /**
+     * Override _renderChars method of fabric.js text obj.
+     * Adds 'shouldStrokeOffset' for inner stroke rendering.
+     * Add custom code to render curved text in case isArc === true
+     * @private
+     * @param {String} method
+     * @param {CanvasRenderingContext2D} ctx Context to render on
+     * @param {Number} lineIndex
+     * @param {Number} charIndex
+     * @param {String} _char
+     * @param {Number} left Left coordinate
+     * @param {Number} top Top coordinate
+     */
+    fabric.PFTextbox.prototype._renderChar = function (method, ctx, lineIndex, charIndex, _char, left, top) {
+        var decl = this._getStyleDeclaration(lineIndex, charIndex),
+            fullDecl = this.getCompleteStyleDeclaration(lineIndex, charIndex),
+            shouldFill = method === 'fillText' && fullDecl.fill,
+            shouldStrokeOffset = method === 'strokeOffsetText' && this.strokeOffsetColor && this.strokeOffset,
+            shouldStroke = method === 'strokeText' && fullDecl.stroke && fullDecl.strokeWidth;
+
+        if (!shouldStroke && !shouldFill && !shouldStrokeOffset) {
+            return;
+        }
+        decl && ctx.save();
+
+        this._applyCharStyles(method, ctx, lineIndex, charIndex, fullDecl);
+        if (this.isArc) {
+            ctx.textAlign = this.textAlign;
+        }
+
+        // change color for PFShadow
+        if (this._isPFShadowRender) {
+            ctx.fillStyle = this.shadowTemp.color;
+            ctx.strokeStyle = this.shadowTemp.color;
+        }
+
+        if (decl && decl.textBackgroundColor) {
+            this._removeShadow(ctx);
+        }
+        if (decl && decl.deltaY) {
+            top += decl.deltaY;
+        }
+
+        ctx.lineJoin = this.strokeLineJoin;
+        ctx.strokeLineCap = this.strokeLineCap;
+
+        var lineIdxMultiplier = this._textLines.length - 1 - lineIndex;
+        if (this.isArc && this.arcAngle < 0) {
+            lineIdxMultiplier = -lineIndex;
+        }
+
+        if (this.isArc) {
+            var radius = this.arcRadius + this.getHeightOfLine(lineIndex) * lineIdxMultiplier;
+            top += this.getHeightOfLine(lineIndex) * lineIdxMultiplier;
+            var angle = Math.PI * 1.5; // always pass 270 degrees in radians as startAngle. Use textAlign 'center' and radius value, to set the needed start and end angles of the curved text
+        }
+        var arcLeft = this._isPFShadowRender ? this.shadowTemp.offsetX / this.scaleX : 0;
+        shouldFill && this.isArc && ctx.fillCircleText(_char, arcLeft, top, radius, this.charSpacing, angle);
+        shouldFill && !this.isArc && ctx.fillText(_char, left, top);
+        shouldStroke && this.isArc && ctx.strokeCircleText(_char, arcLeft, top, radius, this.charSpacing, angle);
+        shouldStroke && !this.isArc && ctx.strokeText(_char, left, top);
+        if (shouldStrokeOffset) {
+            ctx.strokeStyle = this.strokeOffsetColor;
+            ctx.lineWidth = this.strokeOffset;
+            this.isArc && ctx.strokeCircleText(_char, arcLeft, top, radius, this.charSpacing, angle);
+            !this.isArc && ctx.strokeText(_char, left, top);
+        }
+        decl && ctx.restore();
+    };
+
+    /**
+     * Returns fabric.PFTextbox instance from an object representation
+     * @static
+     * @memberOf fabric.PFTextbox
+     * @param {Object} object Object to create an instance from
+     * @param {Function} [callback] Callback to invoke when an fabric.PFTextbox instance is created
+     */
+    fabric.PFTextbox.fromObject = function (object, callback) {
+        return fabric.Object._fromObject('PFTextbox', object, callback, 'text');
+    };
+
+    /**
+     * PFTextGroup class, based on fabric.Group, allows the user to create a fabric group objects
+     * @class fabric.PFTextGroup
+     * @extends fabric.Group
+     * @mixes fabric.Collection
+     * @return {fabric.PFTextGroup} thisArg
+     */
+    fabric.PFTextGroup = fabric.util.createClass(fabric.Group, fabric.Collection, {
+
+        drawObject: function (ctx, forClipping) {
+            for (var i = 0, len = this._objects.length; i < len; i++) {
+                this.overrideFunctions(this._objects[i]);
+                if (this._objects[i].shadow && this._objects[i].shadow.color) {
+                    ctx.renderPFShadow = true; // set to render shadow only
+                    this._objects[i].shadowTemp = this._objects[i].shadow;
+                    this._objects[i].shadow = null;
+                    this._objects[i].render(ctx);
+                    this._objects[i].shadow = this._objects[i].shadowTemp;
+                    this._objects[i].shadowTemp = null;
+                    ctx.renderPFShadow = false;
+                }
+            }
+
+            for (var i = 0, len = this._objects.length; i < len; i++) {
+                ctx.renderPFShadow = false;
+                this._objects[i].render(ctx);
+            }
+            this._drawClipPath(ctx);
+        },
+
+        overrideFunctions: function (obj) {
+            if (obj.type === 'text') {
+
+                /**
+                 * Renders text instance on a specified context
+                 * @param {CanvasRenderingContext2D} ctx Context to render on
+                 */
+                obj.render = function(ctx) {
+                    // do not render if object is not visible
+                    if (!this.visible) {
+                        return;
+                    }
+                    if (this.canvas && this.canvas.skipOffscreen && !this.group && !this.isOnScreen()) {
+                        return;
+                    }
+                    if (this._shouldClearDimensionCache()) {
+                        this.initDimensions();
+                    }
+                    this._isPFShadowRender = !!ctx.renderPFShadow;
+                    this.callSuper('render', ctx);
+                    this._isPFShadowRender = false;
+
+                }.bind(obj);
+
+                obj._renderTextCommon = fabric.PFTextbox.prototype._renderTextCommon.bind(obj);
+                obj._renderChars = fabric.PFTextbox.prototype._renderChars.bind(obj);
+                obj._renderChar = fabric.PFTextbox.prototype._renderChar.bind(obj);
+
+                /**
+                 * @private
+                 * @param {CanvasRenderingContext2D} ctx Context to render on
+                 */
+                obj._setShadow = function(ctx) {
+                    if (!this.shadow || !this._isPFShadowRender) {
+                        return;
+                    }
+                    var shadow = this.shadow, canvas = this.canvas, scaling,
+                        multX = (canvas && canvas.viewportTransform[0]) || 1,
+                        multY = (canvas && canvas.viewportTransform[3]) || 1;
+                    if (shadow.nonScaling) {
+                        scaling = { scaleX: 1, scaleY: 1 };
+                    } else {
+                        scaling = this.getObjectScaling();
+                    }
+                    if (canvas && canvas._isRetinaScaling()) {
+                        multX *= fabric.devicePixelRatio;
+                        multY *= fabric.devicePixelRatio;
+                    }
+                    ctx.shadowColor = shadow.color;
+                    ctx.shadowBlur = shadow.blur * fabric.browserShadowBlurConstant *
+                        (multX + multY) * (scaling.scaleX + scaling.scaleY) / 4;
+                    ctx.shadowOffsetX = shadow.offsetX * multX * scaling.scaleX;
+                    ctx.shadowOffsetY = shadow.offsetY * multY * scaling.scaleY;
+                };
+
+            }
+        },
+
+    });
+
+    /**
+     * Returns {@link fabric.Group} instance from an object representation
+     * @static
+     * @memberOf fabric.Group
+     * @param {Object} object Object to create a group from
+     * @param {Function} [callback] Callback to invoke when an group instance is created
+     */
+    fabric.PFTextGroup.fromObject = function (object, callback) {
+        fabric.util.enlivenObjects(object.objects, function (enlivenedObjects) {
+            fabric.util.enlivenObjects([object.clipPath], function (enlivedClipPath) {
+                var options = fabric.util.object.clone(object, true);
+                options.clipPath = enlivedClipPath[0];
+                delete options.objects;
+                callback && callback(new fabric.Group(enlivenedObjects, options, true));
+            });
+        });
+    };
+
+})(typeof exports !== 'undefined' ? exports : this);

@@ -1,0 +1,228 @@
+/**
+ * Fabric.js aligning guidelines to show guidelines between all objects while moving
+ */
+function fabricAligningGuidelines(canvas) {
+
+    var ctx = canvas.getSelectionContext(),
+        aligningLineOffset = 5,
+        aligningLineMargin = 4,
+        aligningLineWidth = 1,
+        aligningLineColor = '#4affa5', // green
+        viewportTransform,
+        zoom = 1;
+
+    function drawVerticalLine(coords) {
+        drawLine(
+            coords.x + 0.5,
+            coords.y1 > coords.y2 ? coords.y2 : coords.y1,
+            coords.x + 0.5,
+            coords.y2 > coords.y1 ? coords.y2 : coords.y1);
+    }
+
+    function drawHorizontalLine(coords) {
+        drawLine(
+            coords.x1 > coords.x2 ? coords.x2 : coords.x1,
+            coords.y + 0.5,
+            coords.x2 > coords.x1 ? coords.x2 : coords.x1,
+            coords.y + 0.5);
+    }
+
+    function drawLine(x1, y1, x2, y2) {
+        ctx.save();
+        ctx.lineWidth = aligningLineWidth;
+        ctx.strokeStyle = aligningLineColor;
+        ctx.beginPath();
+        var point1 = fabric.util.transformPoint(new fabric.Point(x1, y1), viewportTransform);
+        var point2 = fabric.util.transformPoint(new fabric.Point(x2, y2), viewportTransform);
+        fabric.util.drawDashedLine(ctx, point1.x, point1.y, point2.x, point2.y, [2, 2]);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function isInRange(value1, value2) {
+        value1 = Math.round(value1);
+        value2 = Math.round(value2);
+        for (var i = value1 - aligningLineMargin, len = value1 + aligningLineMargin; i <= len; i++) {
+            if (i === value2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    var verticalLines = [],
+        horizontalLines = [],
+        dragging = false;
+
+    /**
+     * Reset properties that might have changed. For example after canvas zoom change
+     */
+    function resetProperties() {
+        /** @type {fabric.Object} obj **/
+        var obj = canvas.getActiveObject();
+        if (obj) {
+            dragging = true;
+        }
+        viewportTransform = canvas.viewportTransform;
+        zoom = canvas.getZoom();
+    }
+
+    canvas.on('mouse:down', resetProperties);
+    canvas.on('canvas:zoomed', resetProperties);
+    canvas.on('object:moving', function(e) {
+        /** @type {fabric.Object} obj **/
+        var obj = e.target;
+        obj.setCoords();
+        var canvasObjects = canvas.getObjects(),
+            objCenter = obj.getCenterPoint(),
+            bbox = obj.getBoundingRect(),
+            objHeight = bbox.height / viewportTransform[3],
+            objWidth = bbox.width / viewportTransform[0],
+            horizontalInTheRange = false,
+            verticalInTheRange = false;
+
+        if (!canvas._currentTransform) {
+            return;
+        }
+
+        // It should be trivial to DRY this up by encapsulating (repeating) creation of x1, x2, y1, and y2 into functions,
+        // but we're not doing it here for perf. reasons -- as this a function that's invoked on every mouse move
+
+        for (var i = canvasObjects.length; i--;) {
+
+            // skip self, skip if not selectable/evented or part of a pattern
+            if (canvasObjects[i] === obj || !canvasObjects[i].selectable || !canvasObjects[i].evented || canvasObjects[i].patternId) {
+                continue;
+            }
+
+            var objectCenter = canvasObjects[i].getCenterPoint(),
+                objectLeft = objectCenter.x,
+                objectTop = objectCenter.y,
+                objectBoundingRect = canvasObjects[i].getBoundingRect(),
+                objectHeight = objectBoundingRect.height / viewportTransform[3],
+                objectWidth = objectBoundingRect.width / viewportTransform[0];
+
+            // snap by the horizontal center line
+            if (isInRange(objectLeft, objCenter.x)) {
+                verticalInTheRange = true;
+                verticalLines.push({
+                    x: objectLeft,
+                    y1: (objectTop < objCenter.y)
+                        ? (objectTop - objectHeight / 2 - aligningLineOffset)
+                        : (objectTop + objectHeight / 2 + aligningLineOffset),
+                    y2: (objCenter.y > objectTop)
+                        ? (objCenter.y + objHeight / 2 + aligningLineOffset)
+                        : (objCenter.y - objHeight / 2 - aligningLineOffset)
+                });
+                obj.setPositionByOrigin(new fabric.Point(objectLeft, objCenter.y), 'center', 'center');
+            }
+
+            // snap by the left edge
+            if (isInRange(objectLeft - objectWidth / 2, objCenter.x - objWidth / 2)) {
+                verticalInTheRange = true;
+                verticalLines.push({
+                    x: objectLeft - objectWidth / 2,
+                    y1: (objectTop < objCenter.y)
+                        ? (objectTop - objectHeight / 2 - aligningLineOffset)
+                        : (objectTop + objectHeight / 2 + aligningLineOffset),
+                    y2: (objCenter.y > objectTop)
+                        ? (objCenter.y + objHeight / 2 + aligningLineOffset)
+                        : (objCenter.y - objHeight / 2 - aligningLineOffset)
+                });
+                obj.setPositionByOrigin(new fabric.Point(objectLeft - objectWidth / 2 + objWidth / 2, objCenter.y), 'center', 'center');
+            }
+
+            // snap by the right edge
+            if (isInRange(objectLeft + objectWidth / 2, objCenter.x + objWidth / 2)) {
+                verticalInTheRange = true;
+                verticalLines.push({
+                    x: objectLeft + objectWidth / 2,
+                    y1: (objectTop < objCenter.y)
+                        ? (objectTop - objectHeight / 2 - aligningLineOffset)
+                        : (objectTop + objectHeight / 2 + aligningLineOffset),
+                    y2: (objCenter.y > objectTop)
+                        ? (objCenter.y + objHeight / 2 + aligningLineOffset)
+                        : (objCenter.y - objHeight / 2 - aligningLineOffset)
+                });
+                obj.setPositionByOrigin(new fabric.Point(objectLeft + objectWidth / 2 - objWidth / 2, objCenter.y), 'center', 'center');
+            }
+
+            // snap by the vertical center line
+            if (isInRange(objectTop, objCenter.y)) {
+                horizontalInTheRange = true;
+                horizontalLines.push({
+                    y: objectTop,
+                    x1: (objectLeft < objCenter.x)
+                        ? (objectLeft - objectWidth / 2 - aligningLineOffset)
+                        : (objectLeft + objectWidth / 2 + aligningLineOffset),
+                    x2: (objCenter.x > objectLeft)
+                        ? (objCenter.x + objWidth / 2 + aligningLineOffset)
+                        : (objCenter.x - objWidth / 2 - aligningLineOffset)
+                });
+                obj.setPositionByOrigin(new fabric.Point(objCenter.x, objectTop), 'center', 'center');
+            }
+
+            // snap by the top edge
+            if (isInRange(objectTop - objectHeight / 2, objCenter.y - objHeight / 2)) {
+                horizontalInTheRange = true;
+                horizontalLines.push({
+                    y: objectTop - objectHeight / 2,
+                    x1: (objectLeft < objCenter.x)
+                        ? (objectLeft - objectWidth / 2 - aligningLineOffset)
+                        : (objectLeft + objectWidth / 2 + aligningLineOffset),
+                    x2: (objCenter.x > objectLeft)
+                        ? (objCenter.x + objWidth / 2 + aligningLineOffset)
+                        : (objCenter.x - objWidth / 2 - aligningLineOffset)
+                });
+                obj.setPositionByOrigin(new fabric.Point(objCenter.x, objectTop - objectHeight / 2 + objHeight / 2), 'center', 'center');
+            }
+
+            // snap by the bottom edge
+            if (isInRange(objectTop + objectHeight / 2, objCenter.y + objHeight / 2)) {
+                horizontalInTheRange = true;
+                horizontalLines.push({
+                    y: objectTop + objectHeight / 2,
+                    x1: (objectLeft < objCenter.x)
+                        ? (objectLeft - objectWidth / 2 - aligningLineOffset)
+                        : (objectLeft + objectWidth / 2 + aligningLineOffset),
+                    x2: (objCenter.x > objectLeft)
+                        ? (objCenter.x + objWidth / 2 + aligningLineOffset)
+                        : (objCenter.x - objWidth / 2 - aligningLineOffset)
+                });
+                obj.setPositionByOrigin(new fabric.Point(objCenter.x, objectTop + objectHeight / 2 - objHeight / 2), 'center', 'center');
+            }
+        }
+
+        if (!horizontalInTheRange) {
+            horizontalLines.length = 0;
+        }
+
+        if (!verticalInTheRange) {
+            verticalLines.length = 0;
+        }
+    });
+
+    canvas.on('before:render', function() {
+        if (canvas.contextTop) {
+            canvas.clearContext(canvas.contextTop);
+        }
+    });
+
+    canvas.on('after:render', function() {
+        for (var i = verticalLines.length; i--;) {
+            drawVerticalLine(verticalLines[i]);
+        }
+        for (var i = horizontalLines.length; i--;) {
+            drawHorizontalLine(horizontalLines[i]);
+        }
+
+        verticalLines.length = horizontalLines.length = 0;
+    });
+
+    canvas.on('mouse:up', function() {
+        dragging = false;
+        verticalLines.length = horizontalLines.length = 0;
+        canvas.requestRenderAll();
+    });
+}

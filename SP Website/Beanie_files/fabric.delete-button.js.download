@@ -1,0 +1,72 @@
+/**
+ * Add delete button to Fabric.js active object
+ */
+function fabricDeleteButton(canvas, deleteCallback) {
+
+    var pos = 'tr', // top-right;
+        viewportTransform = canvas.viewportTransform,
+        panX,
+        panY,
+        deleteBtn;
+
+    function initDelete () {
+        deleteBtn = $('<span class="canvas-delete-button"></span>');
+        deleteBtn.hide();
+        deleteBtn.on('click', function (e) {
+            if (canvas.getActiveObject()) {
+                // canvas.remove(canvas.getActiveObject());
+                deleteBtn.hide();
+                deleteCallback(canvas.getActiveObject());
+            }
+        });
+        $(canvas.wrapperEl).append(deleteBtn);
+    }
+
+    initDelete();
+
+    /**
+     * @param {Event} e
+     */
+    function renderDelete (e) {
+        /** @type {fabric.Object} obj **/
+        var obj = e.target || canvas.getActiveObject();
+
+        if (!obj) {
+            deleteBtn.hide();
+            return;
+        }
+
+        obj.setCoords();
+
+        var x = obj.oCoords[pos].x;
+        var y = obj.oCoords[pos].y;
+
+        deleteBtn.css({
+            top: y - 10,
+            left: x - 10,
+        });
+
+        if (x < 0 || y < 0 || x > canvas.getWidth() || y > canvas.getHeight()) {
+            deleteBtn.hide();
+        } else {
+            deleteBtn.show();
+        }
+    }
+
+    /**
+     * Reset properties that might have changed. For example after canvas zoom change
+     */
+    function resetProperties() {
+        viewportTransform = canvas.viewportTransform;
+        panX = canvas.panX;
+        panY = canvas.panY;
+        deleteBtn[0].style.left += panX;
+        deleteBtn[0].style.top += panY;
+    }
+
+    canvas.on({
+        'canvas:zoomed': resetProperties,
+        'after:render': renderDelete,
+    });
+
+}

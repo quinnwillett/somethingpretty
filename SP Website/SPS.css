@@ -1,0 +1,294 @@
+@charset "utf-8";
+/* CSS Document */
+#thelogo{
+	position: absolute;
+	left: 450px;
+	top: 0px;
+}
+#homelink{
+	
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 375px;
+	height: 80px;
+	border-right-width: thick;
+	text-align: center;
+	font-size: 40px;
+	font-family:ebrima;
+	
+}
+#shoplink{
+	
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	border-right-width: medium;
+	width: 375px;
+	height: 80px;
+	position: absolute;
+	left: 355px;
+	top: 256px;
+	text-align: center;
+	font-size: 40px;
+	font-family:ebrima;
+}
+#aboutlink{
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	border-right-width: medium;
+	width: 375px;
+	height: 80px;
+	position: absolute;
+	left:737px;
+	top: 256px;
+	text-align: center;
+	font-size: 40px;
+	font-family:ebrima;
+}
+#contactlink{
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	border-right-width: medium;
+	width: 375px;
+	height: 80px;
+	position: absolute;
+	left: 1120px;
+	top: 256px;
+	text-align: center;
+	font-size: 40px;
+	font-family:ebrima;
+}
+#collumn1{
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 1485px;
+	
+}
+#viewcart{
+	
+position: absolute;
+	left: 1280px;
+	top: 200px;
+}
+#collumn2{
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	height: 1625px;
+	width: 1485px;
+}
+#collumn3{
+	background-color: black;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 3px;
+	height: 1625px;
+	position: absolute;
+	left: 200px;
+	top: 370px;
+}
+#collumn4{
+	background-color: black;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 3px;
+	height: 1625px;
+	position: absolute;
+	left: 1285px;
+	top: 370px;
+}
+#collumnhead1{
+	position: absolute;
+	top: 400px;
+	left: 20px;
+}
+#collumnhead2{
+	position: absolute;
+	top: 400px;
+	left: 1305px;
+}
+#frog1{
+	position: absolute;
+	top: 600px;
+	left: 13px;
+}
+#frog2{
+	position: absolute;
+	top: 600px;
+	left: 1298px;
+}
+#king1{
+	position: absolute;
+	top: 850px;
+}
+#king2{
+	position: absolute;
+	top: 850px;
+	left: 1298px;
+}
+#blue1{
+	position: absolute;
+	top: 1200px;
+	left: 25px;
+	
+}
+#blue2{
+	position: absolute;
+	top: 1200px;
+	left: 1330px;
+}
+#eface1{
+	position: absolute;
+	top: 1550px;
+	left: 25px;
+}
+#eface2{
+	position: absolute;
+	top: 1550px;
+	left: 1315px;
+}
+#collumnhead3{
+	position: absolute;
+	top: 1800px;
+	left: 25px;
+}
+#collumnhead4{
+	position: absolute;
+	top: 1800px;
+	left: 1315px;
+}
+#bottomguy{
+	position: absolute;
+	left: 275px;
+	top: 1498px;
+}
+#speech{
+	position: absolute;
+	left: 700px;
+	top: 1200px;
+}
+#splat{
+	position: absolute;
+	top: 235px;
+}
+#pro1{
+	background-color: black;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 250px;
+	height:300px;
+	position: absolute;
+	left: 250px;
+	top: 420px;
+}
+#pro2{
+	background-color: black;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 200px;
+	height: 300px;
+	position: absolute;
+	left: 640px;
+	top: 420px;
+}
+#pro3{
+	background-color: black;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 200px;
+	height: 300px;
+	position: absolute;
+	left: 980px;
+	top: 420px;
+}
+#pro4{
+    background-color: black;
+    border-style: solid;
+    border-color: black;
+    border-width: 5px;
+    width: 218px;
+    height: 273px;
+    position: absolute;
+    left: 269px;
+    top: 821px;
+	
+}
+#pro5{
+    background-color: black;
+    border-style: solid;
+    border-color: black;
+    border-width: 5px;
+    width: 216px;
+    height: 298px;
+    position: absolute;
+    left: 618px;
+    top: 820px;
+}
+#pro6{
+	background-color: black;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 250px;
+	height: 300px;
+	position: absolute;
+	left: 950px;
+	top: 820px;
+}
+#add{
+	position: absolute;
+	top: 653px;
+	left: 280px;
+}
+#add2{
+	position: absolute;
+	left: 645px;
+	top: 651px;
+	
+}
+#add3{
+	position: absolute;
+	left: 985px;
+	top: 651px;
+	
+}
+#beanie{
+    position: absolute;
+    left: 280px;
+    top: 825px;
+    width: 229px;
+    height: 248px;
+}
+#beaniebutton{
+    position: absolute;
+    left: 282px;
+    top: 1055px;
+    height: 43px;
+}
+#peeker{
+	
+	position:absolute;
+	left: 630px;
+	top: 825px;
+}
+#peekerbutton{
+	position: absolute;
+	left: 630px;
+	top: 1053px;
+	
+}

@@ -1,0 +1,254 @@
+if (!Object.create) {
+    Object.create = function (proto, props) {
+        if (typeof props != "undefined") {
+            throw "The multiple-argument version of Object.create is not provided by this browser and cannot be shimmed.";
+        }
+        function Ctor() {
+        }
+
+        Ctor.prototype = proto;
+        return new Ctor();
+    };
+}
+
+/**
+ * @param {Object|Function} __o__
+ * @param {Function} [__ext__]
+ **/
+function Class(__o__, __ext__) {
+    var __ofn__;
+    if (__o__ instanceof Function) {
+        __ofn__ = __o__;
+        __o__ = __o__();
+    }
+    var __re__ = function () {
+        // clone
+        var __clone;
+        if (arguments.length == 0) {
+            __clone = function () {
+                return new __re__;
+            };
+        } else {
+            var __args__ = arguments;
+            __clone = function () {
+                var a = [];
+                for (var i = 0; i < __args__.length; ++i) {
+                    a.push('__args__[' + String(i) + ']');
+                }
+                return eval('new __re__(' + a.join(', ') + ')');
+            };
+        }
+        if (!( this instanceof __re__ )) {
+            return __clone();
+        }
+        if (Class._inProgress) {
+            return;
+        }
+        if (!__re__.__context) {
+            this.__parent_constructors__ = [];
+        } else if (__o__.__construct) {
+            __re__.__context.__parent_constructors__.unshift(__o__.__construct);
+        }
+        var __context__ = __re__.__context || this;
+        var __k__, __prop__;
+        var PARENT;
+        if (__re__.__priv__) {
+            eval(__re__.__priv__);
+        }
+        if (__ext__) {
+            __ext__.__context = __context__;
+            try {
+                PARENT = new __ext__;
+            } catch (e) {
+                __ext__.__context = null;
+                throw(e);
+            }
+            __ext__.__context = null;
+            for (__k__  in PARENT) {
+                __context__[__k__] = this[__k__] = PARENT[__k__];
+            }
+            if (!__ext__.__CLASS_DEF__ && PARENT.__construct instanceof Function) { // extend prototype
+                if (!isset(PARENT.__construct.__args)) {
+                    PARENT.__construct.__args = Class._getFnArgs(PARENT.__construct);
+                }
+                if (!PARENT.__construct.__args) {
+                    PARENT.__construct.call(__context__);
+                }
+            }
+        }
+        __context__.__clone = __clone;
+        for (__k__ in __o__) {
+            __prop__ = __o__[__k__];
+            if (__prop__ instanceof Function) {
+                var __prop_fn__;
+                if (__re__.__priv_var__ || __prop__.__use_parent__) {
+                    __prop_fn__ = eval('(function(' + __prop__.__args + '){' + __prop__.__str + '})');
+                } else {
+                    __prop_fn__ = __prop__;
+                }
+                if (__prop_fn__.bind) {
+                    __prop_fn__ = __prop_fn__.bind(__context__);
+                } else {
+                    __prop_fn__ = $.proxy(__prop_fn__, __context__);
+                }
+                __prop_fn__.toString = Class._toString(__prop__); // debug info
+                __prop_fn__.__args = __prop__.__args;
+                __context__[__k__] = this[__k__] = __prop_fn__;
+            } else {
+                __context__[__k__] = Class._clone(__prop__); // no require for childs
+            }
+        }
+        if (!__re__.__context) {
+            var __construct;
+            for (__k__ in this.__parent_constructors__) {
+                __construct = this.__parent_constructors__[__k__];
+                if (!__construct.__args) {
+                    __construct.call(this);
+                }
+            }
+            if (__o__.__construct || ( __construct && __construct.__args /*last*/ )) {
+                // -------------------------------------------------------------- //
+                // ----- This is the constructor entry, if you wish to debug ---- //
+                // -------------------------------------------------------------- //
+                this.__construct.apply(null, arguments);
+            }
+            delete this.__parent_constructors__;
+        }
+        // if( __o__.__construct && (  !__re__.__context|| !__o__.__construct.__args /* def constructor */ ) ){
+        // 	this.__construct.apply( null, arguments );
+        // }
+    }; // var __re__ = function(){
+    if (__ofn__) {
+        var str = Class._getFnString(__ofn__);
+        var s = str.indexOf('return');
+        __re__.__priv__ = str.substr(0, s);
+        __re__.__priv_var__ = Boolean(__re__.__priv__.match(/var (?!PARENT)/) || __re__.__priv__.match(/function/));
+    }
+    __re__.__CLASS_DEF__ = true;
+    if (__ext__) {
+        __re__.prototype = Object.create(__ext__.prototype);
+    }
+    __re__.__NAME = __o__.__NAME;
+    delete __o__.__NAME;
+    //__re__.prototype.__NAME = __o__.__NAME;
+    for (var k in __o__) {
+        var prop = __o__[k];
+        if (prop instanceof Function) {
+            prop.__str = Class._getFnString(prop);
+            prop.__use_parent__ = ( prop.__str.indexOf('PARENT') != -1 );
+            __re__.__use_parent__ = __re__.__use_parent__ || prop.__use_parent__ || false;
+            prop.__args = Class._getFnArgs(prop);
+        }
+    }
+    // debug info
+    if (__re__.__NAME) {
+        __re__.toString = function () {
+            return 'Class ' + __re__.__NAME;
+        };
+        try {
+            eval(__re__.__NAME + ' = __re__;');
+        } catch (e) {
+            window.console && window.console.error(__re__, '__NAME', e);
+        }
+    } else if (__o__.__construct) {
+        __re__.toString = Class._toString(__o__.__construct);
+    } else if (__ext__) {
+        __re__.toString = __ext__.toString;
+    } else {
+        __re__.toString = function () {
+            return '[empty Class constructor]';
+        };
+    }
+    return __re__;
+}
+
+Class._Base = function () {
+};
+
+Class._toString = function (fn) {
+    return function () {
+        return fn.toString();
+    };
+};
+
+Class._getFnString = function (fn) {
+    var str = fn.toString();
+    var s = str.indexOf('{');
+    if (s == -1) {
+        return '';
+    }
+    var e = str.lastIndexOf('}');
+    if (e == -1) {
+        return '';
+    }
+    return str.substr(s + 1, e - s - 1);
+};
+
+Class._getFnArgs = function (fn) {
+    var str = fn.toString();
+    var s = str.indexOf('(');
+    if (s == -1) {
+        return '';
+    }
+    var e = str.indexOf(')');
+    if (e == -1) {
+        return '';
+    }
+    var args = str.substr(s + 1, e - s - 1).split(',');
+
+    var trim = function (str) {
+        if (String.prototype.trim) {
+            return str.trim();
+        }
+        return str.replace(/^\s+|\s+$/g, '');
+    };
+
+    for (var k in args) {
+        args[k] = trim(args[k]);
+    }
+    return args.join(', ');
+};
+
+Class._clone = function (v) {
+    if (v instanceof Object) {
+        var k, re;
+        if (v instanceof Array) {
+            re = [];
+            for (k in v) {
+                re.push(Class._clone(v[k]));
+            }
+            return re;
+        }
+        if (v.__clone) {
+            return v.__clone();
+        }
+        if (v.constructor == Object) {
+            re = {};
+            for (k in v) {
+                re[k] = Class._clone(v[k]);
+            }
+            return re;
+        }
+    }
+    return v;
+};
+
+/**
+ * @deprecated
+ * @param {Function} fn
+ * @returns {Object}
+ */
+Class.define = function (fn) {
+    Class._inProgress = true;
+    var re = fn();
+    Class._inProgress = false;
+    var str = Class._getFnString(fn);
+    var s = str.indexOf('return');
+    re.__priv__ = str.substr(0, s);
+    re.__priv_var__ = Boolean(re.__priv__.match(/var (?!PARENT)/) || re.__priv__.match(/function/));
+    return re;
+};
+
+if (window) {
+    window.Class = Class;
+}

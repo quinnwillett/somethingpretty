@@ -1,0 +1,57 @@
+(function () {
+    'use strict';
+
+    PF.SlickHelper = {};
+
+    /**
+     * @param {Element} slickNode
+     * @param {number} currentSlide
+     * @param {number} nextSlide
+     * @param {number} maxDots
+     */
+    PF.SlickHelper.limitSliderDots = function (slickNode, currentSlide, nextSlide, maxDots) {
+        maxDots = maxDots || 6;
+
+        var $slick = $(slickNode);
+        var totalCount = $slick.find('.slick-dots li').length;
+
+        if (totalCount <= maxDots) {
+            return;
+        }
+
+        // Initial setup
+        if ($slick.find('[class*="small-1"]').length < 1) {
+            $slick.find('ul.slick-dots li').each(function (index) {
+                $(this).addClass('dot-index-' + index);
+            });
+            $slick.find('ul.slick-dots li').eq(maxDots).addClass('n-small-1');
+            $(".n-small-1").nextAll().addClass('pf-d-none');
+        }
+
+        var $nextDotEl = $slick.find('ul.slick-dots li.dot-index-' + nextSlide);
+        if (nextSlide > currentSlide && $nextDotEl.hasClass('n-small-1')) {
+            $nextDotEl.removeClass('n-small-1');
+            var nextSlidePlusOne = nextSlide + 1;
+            $slick.find('ul.slick-dots li.dot-index-' + nextSlidePlusOne).addClass('n-small-1');
+            $slick.find(".n-small-1").removeClass('pf-d-none');
+            var pPointer = nextSlide - 5;
+            var pPointerMinusOne = pPointer - 1;
+            $slick.find('ul.slick-dots li').eq(pPointerMinusOne).removeClass('p-small-1');
+            $slick.find('ul.slick-dots li').eq(pPointer).addClass('p-small-1');
+            $slick.find(".p-small-1").removeClass('pf-d-none');
+            $slick.find(".p-small-1").prevAll().addClass('pf-d-none');
+        } else if (nextSlide <= currentSlide && $nextDotEl.hasClass('p-small-1')) {
+            $nextDotEl.removeClass('p-small-1');
+            var prevSlideMinusOne = nextSlide - 1;
+            $slick.find('ul.slick-dots li.dot-index-' + prevSlideMinusOne).addClass('p-small-1');
+            $slick.find(".p-small-1").removeClass('pf-d-none');
+            var nPointer = nextSlide + 5;
+            var nPointerPlusOne = nPointer + 1;
+            $slick.find('ul.slick-dots li').eq(nPointerPlusOne).removeClass('n-small-1');
+            $slick.find('ul.slick-dots li').eq(nPointer).addClass('n-small-1');
+            $slick.find(".n-small-1").nextAll().addClass('pf-d-none');
+        }
+
+        $slick.find('ul.slick-dots li').addClass('slick-mobile');
+    }
+})();
