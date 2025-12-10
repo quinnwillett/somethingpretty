@@ -1,0 +1,236 @@
+/**
+ * Fabric.js aligning guidelines to show guidelines around canvas and in horizontal, vertical center
+ */
+function fabricCenteringGuidelines(canvas, position) {
+
+    var canvasWidth = position.width, // canvas.getWidth(),
+        canvasHeight =  position.height, // canvas.getHeight(),
+        canvasLeft = position.left, // 0
+        canvasTop = position.top, // 0
+        canvasRight = canvasLeft + canvasWidth,
+        canvasBottom = canvasTop + canvasHeight,
+        canvasWidthCenter = Math.round(canvasLeft + canvasWidth / 2),
+        canvasHeightCenter = Math.round(canvasTop + canvasHeight / 2),
+        ratio = sideCenterRatio(),
+        canvasLeftCenter = Math.round(canvasLeft + canvasWidth * ratio),
+        canvasRightCenter = Math.round(canvasLeft + canvasWidth - canvasWidth * ratio),
+        canvasWidthCenterMap = {},
+        canvasLeftCenterMap = {},
+        canvasRightCenterMap = {},
+        canvasHeightCenterMap = {},
+        canvasTopMap = {},
+        canvasBottomMap = {},
+        canvasLeftMap = {},
+        canvasRightMap = {},
+        lineMargin = 4,
+        lineColor = '#4affff', // cyan
+        lineWidth = 1,
+        adjustLineBy = 0.5,
+        ctx = canvas.getSelectionContext(),
+        viewportTransform = canvas.viewportTransform,
+        zoom = canvas.getZoom(),
+        dragging = false;
+
+    recalcMaps();
+
+    /**
+     * @return {Boolean}
+     */
+    function showAlways() {
+        return canvas._showGuidelines ? canvas._showGuidelines : dragging;
+    }
+
+    /**
+     * @return {Boolean}
+     */
+    function showCenter() {
+        return canvas._guidelinesOptions && canvas._guidelinesOptions.center;
+    }
+
+    /**
+     * @return {Boolean}
+     */
+    function showSideCenter() {
+        return canvas._guidelinesOptions && canvas._guidelinesOptions.sideCenter;
+    }
+
+    /**
+     * @return {Number}
+     */
+    function sideCenterRatio() {
+        return canvas._guidelinesOptions ? canvas._guidelinesOptions.sideCenterRatio : 0;
+    }
+
+    /**
+     *
+     * @param {Number} x1
+     * @param {Number} y1
+     * @param {Number} x2
+     * @param {Number} y2
+     * @param {Boolean} [isSolid]
+     */
+    function drawLine(x1, y1, x2, y2, isSolid) {
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = lineColor;
+        ctx.beginPath();
+        var point1 = fabric.util.transformPoint(new fabric.Point(x1, y1), viewportTransform);
+        var point2 = fabric.util.transformPoint(new fabric.Point(x2, y2), viewportTransform);
+        fabric.util.drawDashedLine(ctx, Math.round(point1.x), Math.round(point1.y), Math.round(point2.x), Math.round(point2.y), [2, isSolid ? 0 : 2]);
+        ctx.closePath();
+        ctx.stroke();
+    }
+
+    var isInVerCenter,
+        isInHorCenter,
+        isInLeftCenter,
+        isInRightCenter,
+        isInTop,
+        isInBottom,
+        isInLeft,
+        isInRight;
+
+    /**
+     * Reset properties that might have changed. For example after canvas zoom change
+     */
+    function resetProperties() {
+        /** @type {fabric.Object} obj **/
+        var obj = canvas.getActiveObject();
+        if (obj) {
+            dragging = true;
+        }
+        viewportTransform = canvas.viewportTransform;
+        zoom = canvas.getZoom();
+        recalcMaps();
+    }
+
+    /**
+     * Recalc left/right/top/bottom maps with zoom viewportTransform
+     */
+    function recalcMaps() {
+        canvasWidthCenterMap = {};
+        canvasHeightCenterMap = {};
+        canvasLeftMap = {};
+        canvasTopMap = {};
+        canvasRightMap = {};
+        canvasBottomMap = {};
+        // width center
+        var point = fabric.util.transformPoint(new fabric.Point(canvasWidthCenter, canvasHeightCenter), viewportTransform);
+        for (var i = point.x - lineMargin, len = point.x + lineMargin; i <= len; i++) {
+            canvasWidthCenterMap[Math.round(i)] = true;
+        }
+        // height center
+        for (var i = point.y - lineMargin, len = point.y + lineMargin; i <= len; i++) {
+            canvasHeightCenterMap[Math.round(i)] = true;
+        }
+        // left
+        point = fabric.util.transformPoint(new fabric.Point(canvasLeft, canvasTop), viewportTransform);
+        for (var i = point.x - lineMargin, len = point.x + lineMargin; i <= len; i++) {
+            canvasLeftMap[Math.round(i)] = true;
+        }
+        // top
+        for (var i = point.y - lineMargin, len = point.y + lineMargin; i <= len; i++) {
+            canvasTopMap[Math.round(i)] = true;
+        }
+        // right
+        point = fabric.util.transformPoint(new fabric.Point(canvasRight, canvasBottom), viewportTransform);
+        for (var i = point.x - lineMargin, len = point.x + lineMargin; i <= len; i++) {
+            canvasRightMap[Math.round(i)] = true;
+        }
+        // bottom
+        for (var i = point.y - lineMargin, len = point.y + lineMargin; i <= len; i++) {
+            canvasBottomMap[Math.round(i)] = true;
+        }
+
+        // side center mapping
+        canvasLeftCenterMap = {};
+        canvasRightCenterMap = {};
+        ratio = sideCenterRatio();
+        canvasLeftCenter = Math.round(canvasLeft + canvasWidth * ratio);
+        canvasRightCenter = Math.round(canvasLeft + canvasWidth - canvasWidth * ratio);
+        // left center
+        point = fabric.util.transformPoint(new fabric.Point(canvasLeftCenter, 0), viewportTransform);
+        for (var i = point.x - lineMargin, len = point.x + lineMargin; i <= len; i++) {
+            canvasLeftCenterMap[Math.round(i)] = true;
+        }
+        // right center
+        point = fabric.util.transformPoint(new fabric.Point(canvasRightCenter, 0), viewportTransform);
+        for (var i = point.x - lineMargin, len = point.x + lineMargin; i <= len; i++) {
+            canvasRightCenterMap[Math.round(i)] = true;
+        }
+    }
+
+    canvas.on('mouse:down', resetProperties);
+    canvas.on('canvas:zoomed', resetProperties);
+    canvas.on('object:moving', function(e) {
+        /** @type {fabric.Object} obj **/
+        var obj = e.target;
+        obj.setCoords();
+        var objCenter = obj.getCenterPoint(),
+            bbox = obj.getBoundingRect(),
+            objHeight = bbox.height / viewportTransform[3],
+            objWidth = bbox.width / viewportTransform[0];
+
+        if (!canvas._currentTransform) {
+            return;
+        }
+
+        var centerPoint = fabric.util.transformPoint(new fabric.Point(objCenter.x, objCenter.y), viewportTransform);
+        isInVerCenter = showCenter() && Math.round(centerPoint.x) in canvasWidthCenterMap;
+        isInHorCenter = Math.round(centerPoint.y) in canvasHeightCenterMap;
+        isInLeftCenter = showSideCenter() && Math.round(centerPoint.x) in canvasLeftCenterMap;
+        isInRightCenter = showSideCenter() && Math.round(centerPoint.x) in canvasRightCenterMap;
+        isInTop = Math.round(bbox.top) in canvasTopMap;
+        isInBottom = Math.round(bbox.top + bbox.height) in canvasBottomMap;
+        isInLeft = Math.round(bbox.left) in canvasLeftMap;
+        isInRight = Math.round(bbox.left + bbox.width) in canvasRightMap;
+
+        if (isInTop || isInBottom || isInLeft || isInRight || isInHorCenter || isInVerCenter || isInLeftCenter || isInRightCenter) {
+            var posX = isInLeft ? canvasLeft + objWidth / 2 : isInRight ? canvasRight - objWidth / 2 : isInVerCenter ? canvasWidthCenter : isInLeftCenter ? canvasLeftCenter : isInRightCenter ? canvasRightCenter : objCenter.x;
+            var posY = isInTop ? canvasTop + objHeight / 2 : isInBottom ? canvasBottom - objHeight / 2 : isInHorCenter ? canvasHeightCenter : objCenter.y;
+            obj.setPositionByOrigin(new fabric.Point(posX, posY), 'center', 'center');
+        }
+    });
+
+    canvas.on('before:render', function() {
+        if (canvas.contextTop) {
+            canvas.clearContext(canvas.contextTop);
+        }
+    });
+
+    canvas.on('after:render', function() {
+        var always = showAlways(),
+            sideCenter = showSideCenter();
+
+        if (showCenter() && (always || isInVerCenter)) {
+            drawLine(canvasWidthCenter + adjustLineBy, canvasTop, canvasWidthCenter + adjustLineBy, canvasBottom, always && isInVerCenter);
+        }
+        if (sideCenter && (always || isInLeftCenter)) {
+            drawLine(canvasLeftCenter + adjustLineBy, canvasTop, canvasLeftCenter + adjustLineBy, canvasBottom, always && isInLeftCenter);
+        }
+        if (sideCenter && (always || isInRightCenter)) {
+            drawLine(canvasRightCenter + adjustLineBy, canvasTop, canvasRightCenter + adjustLineBy, canvasBottom, always && isInRightCenter);
+        }
+        if (always || isInHorCenter) {
+            drawLine(canvasLeft, canvasHeightCenter + adjustLineBy, canvasRight, canvasHeightCenter + adjustLineBy, always && isInHorCenter);
+        }
+        if (always || isInTop) {
+            drawLine(canvasLeft, canvasTop + adjustLineBy, canvasRight, canvasTop + adjustLineBy, always && isInTop);
+        }
+        if (always || isInBottom) {
+            drawLine(canvasLeft, canvasBottom + adjustLineBy, canvasRight, canvasBottom + adjustLineBy, always && isInBottom);
+        }
+        if (always || isInLeft) {
+            drawLine(canvasLeft + adjustLineBy, canvasTop, canvasLeft + adjustLineBy, canvasBottom, always && isInLeft);
+        }
+        if (always || isInRight) {
+            drawLine(canvasRight + adjustLineBy, canvasTop, canvasRight + adjustLineBy, canvasBottom, always && isInRight);
+        }
+    });
+
+    canvas.on('mouse:up', function() {
+        dragging = false;
+        // clear these values, to stop drawing guidelines once mouse is up
+        isInVerCenter = isInHorCenter = isInLeftCenter = isInRightCenter = isInTop = isInBottom = isInLeft = isInRight = null;
+        canvas.requestRenderAll();
+    });
+}

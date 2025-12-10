@@ -1,0 +1,71 @@
+/**
+ * Disable object moving outside of canvas
+ */
+function fabricMovementCheck(canvas, position) {
+
+    var viewportTransform,
+        zoom = 1,
+        canvasWidth = position.width, // canvas.getWidth(),
+        canvasHeight =  position.height, // canvas.getHeight(),
+        canvasLeft = position.left, // 0
+        canvasTop = position.top, // 0
+        canvasRight = canvasLeft + canvasWidth,
+        canvasBottom = canvasTop + canvasHeight,
+        boundsMargin = 0.9; // remaining 10% should be always visible in canvas
+
+    /**
+     * Reset properties that might have changed. For example after canvas zoom change
+     */
+    function resetProperties() {
+        viewportTransform = canvas.viewportTransform;
+        zoom = canvas.getZoom();
+    }
+
+    function onObjectMoving(e) {
+        /** @type {fabric.Object} obj **/
+        var obj = e.target;
+        obj.setCoords();
+        var bbox = obj.getBoundingRect(),
+            objHeight = bbox.height / viewportTransform[3],
+            objWidth = bbox.width / viewportTransform[0];
+
+        if (!canvas._currentTransform) {
+            return;
+        }
+
+        // object is too big
+        // if (objHeight > canvasHeight || objWidth > canvasWidth) {
+        //     return;
+        // }
+        var newCanvasLeft = canvasLeft;
+        var newCanvasTop = canvasTop;
+        var newCanvasRight = canvasRight;
+        var newCanvasBottom = canvasBottom;
+        if (zoom !== 1) {
+            var point = fabric.util.transformPoint(new fabric.Point(newCanvasLeft, newCanvasTop), viewportTransform);
+            newCanvasLeft = point.x;
+            newCanvasTop = point.y;
+            point = fabric.util.transformPoint(new fabric.Point(newCanvasRight, newCanvasBottom), viewportTransform);
+            newCanvasRight = point.x;
+            newCanvasBottom = point.y;
+        }
+
+        var isOutTop = bbox.top < newCanvasTop - bbox.height * boundsMargin,
+            isOutBottom = bbox.top + bbox.height * (1 - boundsMargin) > newCanvasBottom,
+            isOutLeft = bbox.left < newCanvasLeft - bbox.width * boundsMargin,
+            isOutRight = bbox.left + bbox.width * (1 - boundsMargin) > newCanvasRight;
+
+        if (isOutTop || isOutBottom || isOutLeft || isOutRight) {
+            // we just simply move object back to center
+            // obj.center();
+            obj.setPositionByOrigin(new fabric.Point(canvasLeft + canvasWidth/2, canvasTop + canvasHeight/2), 'center', 'center');
+        }
+
+    }
+
+    canvas.on({
+        'object:moving': onObjectMoving,
+        'mouse:down': resetProperties,
+        'canvas:zoomed': resetProperties,
+    });
+}

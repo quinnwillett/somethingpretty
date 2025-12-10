@@ -1,0 +1,359 @@
+(function (window) {
+    'use strict';
+
+    var modelPath = PF.ASSETS_URL + 'tensorflow/model.json';
+    var model, modelLoaded = false;
+
+    window.tensorTransparrency = asyncPredictTransparency;
+
+
+    function calcHist(img, x1, y1, x2, y2, numBins, minLevel, maxLevel) {
+
+        if (numBins == undefined)
+            numBins = 256;
+        if (minLevel == undefined)
+            minLevel = 0;
+        if (maxLevel == undefined)
+            maxLevel = 255.0;
+
+        var hist = [];
+        var i, x, y, idx, val;
+        var pixinrange = 0;
+
+        var pixelCount = (x2 * y2);
+        var visiblePixels = 0;
+        var importantPixels = 0;
+        var band = minLevel + maxLevel;
+        for (i = 0; i < numBins; ++i)
+            hist[i] = 0;
+
+        for (y = y1, idx = 0; y < y2; ++y) {
+            for (x = x1; x < x2; ++x, idx += 4) {
+                var a = img.data[idx + 3];
+                if (a >= minLevel && a <= maxLevel) {
+                    //val = Math.floor((a / 255) * (numBins-1));
+                    val = Math.floor((a / band) * (numBins - 1));
+                    ++hist[val];
+                    ++pixinrange;
+                }
+                if (a > 0) {
+                    ++visiblePixels;
+                }
+            }
+        }
+
+        importantPixels = visiblePixels - pixinrange;
+        return [hist, visiblePixels, pixelCount, importantPixels, pixinrange];
+    }
+
+
+    function arrSum(arr) {
+        return arr.reduce(function (a, b) {
+            return a + b
+        }, 0);
+    }
+
+
+    function truncate(n, decimals) {
+        var multiplier = Math.pow(10, decimals); // 10 ** decimals;
+        return (n * multiplier) / multiplier;
+    }
+
+
+    function round(input) {
+        return parseFloat((input).toFixed(4));
+    }
+
+    function method_1(npixhist, visiblePixels) {
+        return [
+            round(truncate((((npixhist.full + 1) * 9) / visiblePixels), 3)),
+            round(truncate((((npixhist.half + 1) * 9) / visiblePixels), 3)),
+            round(truncate((((npixhist.under + 1) * 9) / visiblePixels), 3))
+        ]
+    }
+
+    function calcNeighbourhods(imageData, canvasWidth, canvasHeight, treshold, pixelMinValue, pixelMaxValue) {
+
+        if (treshold === undefined) {
+            treshold = 12;
+        }
+
+        var stepw = 4;
+        var stepd = 4;
+        var npixhist = {"full": 0, "half": 0, "under": 0};
+
+        function boleanTreshold(cpix, npix) {
+            var cpt = cpix + treshold;
+            var cnt = cpix - treshold;
+            if (cpt > npix && npix > cnt) {
+                return 1
+            } else {
+                return 0
+            }
+        }
+
+        for (var y = 0; y < canvasHeight; y += stepw) {
+            for (var x = 0; x < canvasWidth; x += stepd) {
+
+                var index_u = ((y + 1) * canvasWidth + x) * 4;
+                var index_d = ((y - 1) * canvasWidth + x) * 4;
+                var index = (y * canvasWidth + x) * 4;
+
+                var pixelval = imageData.data[index + 3]; // Alpha channel
+
+                if (pixelval < pixelMaxValue && pixelval > pixelMinValue) {
+
+                    var ku = imageData.data[(index_u - stepd) + 3];
+                    var cu = imageData.data[index_u + 3];
+                    var lu = imageData.data[(index_u + stepd) + 3];
+
+                    var ck = imageData.data[(index - stepd) + 3];
+                    var cc = imageData.data[index + 3]; // Center pixel
+                    var cl = imageData.data[(index + stepd) + 3];
+
+                    var kd = imageData.data[(index_d - stepd) + 3];
+                    var cd = imageData.data[index_d + 3];
+                    var ld = imageData.data[(index_d + stepd) + 3];
+
+                    var neighbourhood8index = [
+                        boleanTreshold(cc, ku), boleanTreshold(cc, cu), boleanTreshold(cc, lu),
+                        boleanTreshold(cc, ck), boleanTreshold(cc, cc), boleanTreshold(cc, cl),
+                        boleanTreshold(cc, kd), boleanTreshold(cc, cd), boleanTreshold(cc, ld)
+                    ];
+
+                    var maxCost = arrSum(neighbourhood8index);
+
+                    if (maxCost == 9) {
+                        npixhist.full += 1;
+
+                    } else if (maxCost > 4.5) {
+                        npixhist.half += 1;
+
+                    } else if (maxCost < 4.5) {
+                        npixhist.under += 1;
+
+                    }
+                }
+            }
+        }
+        return npixhist;
+    }
+
+
+    function predict(histogram) {
+
+        var cc = tf.tensor([histogram,]),
+            result = tf.softmax(model.predict(cc));
+        var kvals = result.toString().split("[[")[1].split("],]")[0].split(",");
+        kvals.forEach(function(value, index) {
+            this[index] = parseFloat(value);
+        }, kvals);
+        return kvals;
+    }
+
+
+    function setlabel(result) {
+        var labelname;
+        if (result[0] > result[1] + result[2]) {
+            labelname = 0;
+        } else if (result[1] > result[0]) {
+            labelname = 1;
+        } else if (result[2] > result[0]) {
+            labelname = 2;
+        } else if (result[2] > result[1]) {
+            labelname = 2;
+        }
+        return labelname;
+    }
+
+
+    function tsnormalize(array, scaledMin, scaledMax) {
+        var max = Math.max.apply(Math, array);
+        var min = Math.min.apply(Math, array);
+        return array.map(function (num) {
+                return (scaledMax - scaledMin) * (num - min) / (max - min) + scaledMin
+            }
+        )
+    }
+
+    function tshistogram(canvaid, bins, minLevel, maxLevel) {
+        var canva = document.getElementById(canvaid);
+        var ctx = canva.getContext('2d');
+        var imageData = ctx.getImageData(0, 0, canva.width, canva.height);
+        var tmp = calcHist(imageData, 0, 0, canva.width, canva.height, bins, minLevel, maxLevel);
+
+        return tmp
+    }
+
+    function combineResult(histogram, nerpixels, tensorinputs) {
+        var newhist = [];
+        for (var i = 0; i < tensorinputs.length; i++) {
+            newhist.push(histogram[tensorinputs[i]]);
+        }
+        var returnHistogram = newhist.concat(nerpixels);
+        return returnHistogram;
+    }
+
+    /**
+     * First initializes TensorFlow model, then calls prediction function
+     *
+     * @param imageObj
+     * @param callback
+     */
+    function asyncPredictTransparency(imageObj, callback) {
+        if (!modelLoaded) {
+            initTF(modelPath).then(function (result) {
+                modelLoaded = true;
+                model = result;
+                predictTransparency(imageObj, callback);
+            }, function (rejection) {
+                console.error('Could not load TF:', rejection);
+                callback();
+            });
+        } else {
+            predictTransparency(imageObj, callback);
+        }
+    }
+
+    function predictTransparency(imageObj, callback) {
+        if (!imageObj) {
+            console.error('Image object not passed!');
+            callback();
+            return;
+        }
+
+        var tensorinputs = [12, 135, 39, 11, 60, 15, 119, 17, 61, 79, 28, 75, 141, 68, 117, 40, 90, 9, 143, 132, 85, 125, 142, 97, 22, 120, 83, 33, 81, 14, 48, 16, 123, 138, 128, 18, 94, 113, 42, 26, 118, 41, 44, 108, 32, 131, 127, 23, 59, 129, 30, 84, 37, 92, 20, 50, 78, 106, 52, 111, 54, 124, 65, 96, 25, 133, 93, 115, 47, 88, 114, 38, 29, 80, 89, 104, 107, 72, 74, 55, 56, 112, 64, 122, 126, 139, 100, 36]
+        var bins = 150;
+
+        var bottom_treshold = 200;
+
+        var min_first_level = 18;
+        var max_safe_level = 70;
+
+        var minLevel = 10;  // alpha channel opacity 10%
+        var maxLevel = 195; // alpha channel opacity 70%
+
+        var img_w = 328;
+        var img_h = 328;
+
+        // Min max logic for histogram normalisation
+        var scaledMin = 0;
+        var scaledMax = 200;
+
+        var treshold = 14; // Neighbourhood pixels differenc treshold
+
+
+        // var canvas = document.getElementById(canvaid);
+        var canvasWidth = img_w;
+        var canvasHeight = img_h;
+        var canvas = document.createElement('canvas');
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        // console.log(canvas.width, canvas.height, 'canvas izmēri');
+        var ctx = canvas.getContext('2d');
+        var imageWidth = imageObj.naturalWidth || imageObj.width;
+        var imageHeight = imageObj.naturalHeight || imageObj.height;
+        // if (img_w < imageWidth || img_h < imageHeight) {
+            var ratio = img_w / Math.max(imageWidth, imageHeight) ;
+            imageWidth = imageObj.width * ratio;
+            imageHeight = imageObj.height * ratio;
+        // }
+        ctx.drawImage(imageObj, 0, 0, imageWidth, imageHeight);
+        // ctx.drawImage(imageObj, 0, 0, canvasWidth, canvasHeight);
+        // console.log(imageWidth, imageHeight);
+        // ctx.drawImage(imageObj, 0, 0, imageWidth, imageHeight);
+        var imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+
+
+        // var a = performance.now();
+
+        var tmp_hists = calcHist(imageData, 0, 0, canvasWidth, canvasHeight, bins, minLevel, maxLevel);
+        var tmp_histogram = tmp_hists[0];
+        var visiblePixels = tmp_hists[1];
+        var pixelCount = tmp_hists[2];
+        var importantPixels = tmp_hists[3];
+        var pixinrange = tmp_hists[3];
+        var norm_hist_cost = arrSum(tmp_histogram);
+
+        // var b = performance.now();
+        // var diff = (b - a);
+        // console.log("calcHist time: ", diff, " milliseconds.");
+        //
+        //
+        // var a = performance.now();
+
+        var tmp_pixels = calcNeighbourhods(imageData, canvasWidth, canvasHeight, treshold, minLevel, maxLevel);
+        var norm_pixels = method_1(tmp_pixels, visiblePixels);
+        var norm_n_cost = arrSum(norm_pixels);
+
+        // var b = performance.now();
+        // var diff = (b - a);
+        // console.log("calcNeighbourhods time: ", diff, " milliseconds.");
+
+
+        // console.log(" tmp_pixels ", tmp_pixels);
+        // console.log(" norm_pixels ", norm_pixels);
+        // console.log(" norm_n_cost ", norm_n_cost);
+        // console.log(" norm_hist_cost ", norm_hist_cost);
+
+        var norm_hist = tsnormalize(tmp_histogram, scaledMin, scaledMax);
+        var histogram = combineResult(norm_hist, norm_pixels, tensorinputs);
+
+        var result = [1, 0, 0];
+        if (tmp_pixels.full > min_first_level) {
+            result = predict(histogram);
+        }
+
+        var predicted = setlabel(result);
+
+        // console.log("TF predicted ", predicted);
+
+        if (tmp_pixels.full > max_safe_level && predicted == 0) {
+            predicted = 1;
+        }
+        if (tmp_pixels.full < max_safe_level && predicted == 1 && tmp_pixels.full > min_first_level) {
+            predicted = 2;
+        }
+
+
+        // visi pixelji ir 400 × 400
+        //  160000
+        // no tiem visi redzmie pixelji ir 40000
+        // no acim redzmajiem pixeljiem visi kas ietekme grafika kvalitati ir
+        // 40000 - ( sum ( min_transparency - max_transparency ))
+        // var transparencylevel = round(100 * ( 100 / importantPixels ))
+        // var transparencylevel = pixinrange * percentmain;
+        // 100 % == ar pixelCount
+        // svarigiew pixelji ir no visiem pixeljiem tikai svarigakie  importantPixels
+
+        var quality_affecting_pixels = visiblePixels - importantPixels;
+        var coofLocal = 100 / visiblePixels;
+        var coofGlobal = 100 / pixelCount;
+        var transparencylevelGlobal = quality_affecting_pixels * coofGlobal;
+        var transparencylevelLocal = quality_affecting_pixels * coofLocal;
+
+        // console.log("predicted label ", predicted);
+        // console.log("Neighbourhods pixels ", tmp_pixels);
+        //
+        // console.log("pixelCount ", pixelCount);
+        // console.log("visiblePixels: ", visiblePixels);
+        // console.log("importantPixels  ", importantPixels);
+        // console.log("Pixels In range ", pixinrange);
+        // console.log("TF result ", result);
+        // console.log("Transparency ", transparencylevelGlobal);
+
+        callback({
+            prediction: predicted,
+            resultTF: result,
+            transparencyGlobal: transparencylevelGlobal,
+            transparencyLocal: transparencylevelLocal,
+            // tmpPixels: tmp_pixels
+        });
+    }
+
+
+    function initTF(modelPath) {
+        return tf.loadLayersModel(modelPath);
+    }
+
+})(window);

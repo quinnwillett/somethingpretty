@@ -1,0 +1,223 @@
+@charset "utf-8";
+/* CSS Document */
+#thelogo{
+	position: absolute;
+	left: 450px;
+	top: 0px;
+}
+#homelink{
+	
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 375px;
+	height: 80px;
+	border-right-width: thick;
+	text-align: center;
+	font-size: 40px;
+	font-family:ebrima;
+	
+}
+#shoplink{
+	
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	border-right-width: medium;
+	width: 375px;
+	height: 80px;
+	position: absolute;
+	left: 355px;
+	top: 256px;
+	text-align: center;
+	font-size: 40px;
+	font-family:ebrima;
+}
+#aboutlink{
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	border-right-width: medium;
+	width: 375px;
+	height: 80px;
+	position: absolute;
+	left:737px;
+	top: 256px;
+	text-align: center;
+	font-size: 40px;
+	font-family:ebrima;
+}
+#contactlink{
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	border-right-width: medium;
+	width: 375px;
+	height: 80px;
+	position: absolute;
+	left: 1120px;
+	top: 256px;
+	text-align: center;
+	font-size: 40px;
+	font-family:ebrima;
+}
+#collumn1{
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 1485px;
+	
+}
+#collumn2{
+	background-color: white;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	height: 1625px;
+	width: 1485px;
+}
+#collumn3{
+	background-color: black;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 3px;
+	height: 1625px;
+	position: absolute;
+	left: 200px;
+	top: 370px;
+}
+#collumn4{
+	background-color: black;
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	width: 3px;
+	height: 1625px;
+	position: absolute;
+	left: 1285px;
+	top: 370px;
+}
+#collumnhead1{
+	position: absolute;
+	top: 400px;
+	left: 20px;
+}
+#collumnhead2{
+	position: absolute;
+	top: 400px;
+	left: 1305px;
+}
+#frog1{
+	position: absolute;
+	top: 600px;
+	left: 13px;
+}
+#frog2{
+	position: absolute;
+	top: 600px;
+	left: 1298px;
+}
+#king1{
+	position: absolute;
+	top: 850px;
+}
+#king2{
+	position: absolute;
+	top: 850px;
+	left: 1298px;
+}
+#blue1{
+	position: absolute;
+	top: 1200px;
+	left: 25px;
+	
+}
+#blue2{
+	position: absolute;
+	top: 1200px;
+	left: 1330px;
+}
+#eface1{
+	position: absolute;
+	top: 1550px;
+	left: 25px;
+}
+#eface2{
+	position: absolute;
+	top: 1550px;
+	left: 1315px;
+}
+#collumnhead3{
+	position: absolute;
+	top: 1800px;
+	left: 25px;
+}
+#collumnhead4{
+	position: absolute;
+	top: 1800px;
+	left: 1315px;
+}
+#email{
+	position: absolute;
+	top: 700px;
+	left: 300px;
+	
+}
+#eboy{
+	position: absolute;
+	top: 400px;
+	left: 300px;
+}
+#eboyc{
+	position: absolute;
+	top: 400px;
+	left: 875px;
+}
+#call{
+	position: absolute;
+	top: 700px;
+	left: 875px;
+	
+}
+#bottomguy{
+	position: absolute;
+	left: 275px;
+	top: 1498px;
+}
+#speech{
+	position: absolute;
+	left: 700px;
+	top: 1200px;
+}
+#splat{
+	position: absolute;
+	top: 235px;
+}
+#arrow{
+	position: absolute;
+	top: 720px;
+	left: 975px;
+}
+#number{
+	position: absolute;
+	top: 1050px;
+	left: 810px;
+}
+#arrow2{
+	position: absolute;
+	left: 375px;
+	top: 725px;
+	
+	
+}
+#emaill{
+	position: absolute;
+	left: 240px;
+	top: 1050px;
+}

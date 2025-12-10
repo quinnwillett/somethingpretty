@@ -1,0 +1,1137 @@
+var PF = PF || (window ? window.PF : {}) || {};
+
+PF.ProductSelector = {
+    products: null,
+    types: null,
+    product: null,
+    variant: null,
+    callback: null,
+    error: false,
+    variantCache: {},
+    productCache: {},
+    options: {},
+    optionBoxes: {},
+    files: {},
+    fileSelectors: {},
+    par: {},
+    data: {},
+    selection: {},
+    selectionCache: {},
+    fileCache: {},
+    show: function (par, callback)
+    {
+        if (!this.products)
+        {
+            $.getJSON('/products/list', { screenmode: par.screenmode }, $.proxy(function (data)
+            {
+                if (data.products)
+                {
+                    this.products = data.products;
+                    var types = [];
+                    for (var i in data.types)
+                    {
+                        var currentType = data.types[i];
+                        if (currentType.categories.length > 0)
+                        {
+                            for (var ii in currentType.categories)
+                            {
+                                types.push({
+                                    title: currentType.categories[ii],
+                                    value: currentType.value + ':' + currentType.categories[ii],
+                                    group : currentType.title
+                                });
+                            }
+                        }
+                        else
+                        {
+                            types.push({
+                                title: currentType.title,
+                                value: currentType.value
+                            });
+                        }
+                    }
+                    this.types = types;
+                    this.show(par, callback);
+                }
+            }, this));
+            return false;
+        }
+        this.dropdowns = {};
+        this.callback = callback;
+        this.par = $.extend({
+            title: dlang('products', 'Choose product'),
+            files: false,
+            store: 0,
+            screenmode: 0,
+            tooltips: 0,
+            data: {},
+            sync: {
+                active: false,
+                updateAll: false
+            }
+        }, par || {});
+        this.dom = this.build();
+
+        new PF.Dialog.open({
+            size: 'lg',
+            html: this.dom
+        });
+
+        if (this.par.data.product && this.par.data.variant)
+        {
+            this.initData();
+        }
+
+        if (this.selection.type)
+        {
+            this.typeSelector.find('select').val(this.selection.type + (this.selection.category ? ':'+ this.selection.category : ''));
+            this.typeSelector.find('select').change();
+        }
+
+        if (this.par.tooltips)
+        {
+            setTimeout(function()
+            {
+                PF.ProductSelector.addTooltip(
+                    PF.ProductSelector.typeSelector.find('span'), 'top', 'manual', dlang('products', 'Select product')
+                );
+
+                PF.ProductSelector.typeSelector.find('span').tooltip('show');
+            }, 300);
+        }
+        return false;
+    },
+    build: function ()
+    {
+        this.typeSelector = this.createDropdown(this.types, dlang('products', 'Product type'));
+        this.typeSelector
+            .find('select')
+            .on('change', this, function (e)
+            {
+                e.data.selectType($(this).val());
+
+                e.data.typeSelector.find('span').tooltip('hide');
+                e.data.markComplete();
+            });
+
+        var dom = $('<div/>', { 'class': 'modal-content productSelector', html: [
+            $('<div/>', { 'class': 'modal-header', html: [
+                $('<button/>', { type: 'button', 'class': 'close', 'data-dismiss': 'modal', 'aria-hidden': 'true', html: '&times;' }),
+                $('<h4/>', { 'class': 'modal-title', html: dlang('products', 'Choose product') })
+            ]}),
+            $('<div/>', { 'class': 'modal-body', html: [
+                $('<div/>', { 'class': 'row', html: [
+                    $('<div/>', { 'class': 'col-md-7', html: [
+                        this.typeSelector,
+                        this.productArea = $('<div/>', {}),
+                        this.variantArea = $('<div/>', {})
+                    ]}),
+                    $('<div/>', { 'class': 'col-md-5 margin-bottom-10 text-center', html: [
+                        this.previewImage = $('<img/>', { width: 200 }).hide(),
+                        this.noPreview = $('<div/>', { 'class': 'noPreview', text: dlang('products', 'No preview available') }).hide()
+                    ]})
+                ]}),
+                $('<div/>', { 'class': 'row', html: [
+                    this.fileArea = $('<div/>', { 'class': 'col-md-12' })
+                ]}),
+                $('<div/>', { 'class': 'row', html: [
+                    this.optionArea = $('<div/>', { 'class': 'col-md-12' })
+                ]})
+            ]}),
+            $('<div/>', { 'class': 'modal-footer clearfix', html: [
+                $('<div/>', { 'class': 'row submitRow', html: [
+                    $('<div/>', { 'class': 'col-md-12', html: [
+                        this.submitButton = $('<a/>', {
+                            'class': 'button red cwhite medium disabled pull-left',
+                            html: 'Done',
+                            href: 'javascript:void(0);',
+                            style: 'pointer-events: all; box-shadow: none; border-color: transparent;'
+                        })
+                            .on('click', $.proxy(this.submit, this)),
+                        this.priceLabel = $('<div>', { 'class': 'price' })
+                    ]})
+                ]})
+            ]})
+        ]});
+
+        return dom;
+    },
+    selectType: function (type)
+    {
+        this.selectProduct(null);
+        this.productArea.empty();
+
+        var brand = true;
+
+        var parts = type.split(':',2);
+        type = parts[0];
+        var category = parts[1];
+
+        if(!this.selection.type){
+            this.selection.type = type;
+        }
+
+        if (category) {
+            this.selection.category = category;
+        } else {
+            this.selection.category = false;
+        }
+
+        if (this.selection.type && type != this.selection.type) {
+            this.selectionCache[this.selection.type] = this.selection;
+            this.fileCache[this.selection.type] = this.files;
+            this.selection = this.selectionCache[type] || {type: type};
+            this.files = this.fileCache[type] || {};
+        }
+
+        var products = [];
+        for (var i in this.products) {
+            var product = this.products[i];
+            if (product.type == type) {
+                if (!product.brand) {
+                    brand = false;
+                }
+                if (category && $.inArray(category, product.categories) === -1) {
+                    continue;
+                }
+                products.push(product);
+            }
+        }
+
+        // Ordering for sublimation products requested by Davis.
+        if (type =="SUBLIMATION") {
+            var right_order = [86,87,121,120,83,89,84];
+            var tmp_products = [];
+            for (i in products) {
+                var prod = products[i];
+                var index = right_order.indexOf(parseInt(prod.id));
+                tmp_products[index] = prod;
+            }
+            products = tmp_products;
+        }
+
+        var modelDropdown;
+        var brandDropdown;
+        var showModels = $.proxy(function (brand) {
+            this.selectVariant(null);
+            if (modelDropdown) {
+                modelDropdown.remove();
+            }
+
+            var models = [];
+            var show = false;
+
+            for (var i in products) {
+                var product = products[i];
+                if (brand === null || product.brand == brand) {
+                    if (product.model) {
+                        title = product.model;
+                        show = true;
+                    } else {
+                        title = product.title;
+                    }
+                    models.push({value: product.id, title: title});
+                }
+            }
+
+            if (models.length === 0) {
+                return false;
+            }
+
+            var single = (models.length === 1);
+
+            if (!single || show) {
+                modelDropdown = this.createDropdown(models, dlang('products', 'Model')).appendTo(this.productArea);
+                modelDropdown.find('select').on('change', this, function (e) {
+                    var product = $(this).val();
+                    e.data.selectProduct(product);
+                    e.data.selection.model = $(this).find("option:selected").data('text');
+                    e.data.markComplete();
+                });
+                this.autoSelectValue(modelDropdown, 'model');
+            } else {
+                this.selectProduct(models[0].value);
+            }
+        }, this);
+
+        //Double select
+        if (brand) {
+            var brands = [];
+            var stored = {};
+
+            for (var i in products)
+            {
+                var product = products[i];
+                if (!stored[product.brand])
+                {
+                    brands.push({
+                        title: product.brand,
+                        value: product.brand
+                    });
+                    stored[product.brand] = 1;
+                }
+            }
+            brandDropdown = this.createDropdown(brands, dlang('products', 'Brand')).appendTo(this.productArea);
+            brandDropdown.find('select').on('change', this, function (e)
+            {
+                var brand = $(this).val();
+                e.data.selection.brand = brand;
+                e.data.selectProduct(null);
+                e.data.markComplete();
+                showModels(brand);
+            });
+
+            this.autoSelectValue(brandDropdown, 'brand');
+        }
+        else
+        {
+            showModels(null);
+        }
+    },
+    selectProduct: function (id)
+    {
+        if (id && !this.variantCache[id])
+        {
+            $.getJSON('/products/variants', {
+                product: id,
+                screenmode: this.par.screenmode
+            },
+            $.proxy(function (data)
+            {
+                if (data.variants)
+                {
+                    if (this.par.screenmode)
+                    {
+                        var arr = [];
+                        for (var i in data.variants)
+                        {
+                            if (typeof arr[data.variants[i].color] === 'undefined')
+                            {
+                                arr[data.variants[i].color] = data.variants[i];
+                            }
+                            else
+                            {
+                                arr[data.variants[i].color].id += ',' + data.variants[i].id;
+                                arr[data.variants[i].color].size += ',' + data.variants[i].size;
+                            }
+                        }
+
+                        data.variants = arr;
+                    }
+
+                    this.variantCache[id] = data.variants;
+                    this.productCache[id] = data.product;
+                    this.selectProduct(id);
+                }
+                else
+                {
+                    this.selectProduct(null);
+                }
+            }, this));
+
+            return false;
+        }
+
+        this.variantArea.empty();
+        this.fileArea.empty();
+        this.optionArea.empty();
+        this.product = this.productCache[id];
+        this.selectVariant(null);
+
+        if (!this.product)
+        {
+            return false;
+        }
+
+        if (this.par.files)
+        {
+            this.showFiles();
+            this.showOptions();
+        }
+
+        var variants = this.variantCache[id];
+        var size = false;
+        var color = false;
+        var colorCode = false;
+        var name = false;
+
+        for (var i in variants)
+        {
+            if (variants[i].size)
+            {
+                size = true;
+            }
+
+            if (variants[i].color)
+            {
+                color = true;
+            }
+
+            if (variants[i].colorCode)
+            {
+                colorCode = true;
+            }
+        }
+
+        if (this.par.screenmode)
+        {
+            size = false;
+        }
+
+        if (!size && !color)
+        {
+            name = true;
+        }
+
+        var colorDropdown;
+        var sizeDropdown;
+        var showColors = $.proxy(function (size)
+        {
+            this.selectVariant(null);
+            if (colorDropdown)
+            {
+                colorDropdown.remove();
+            }
+
+            var colors = [];
+            for (var i in variants)
+            {
+                var variant = variants[i];
+                if (size === null || variant.size == size)
+                {
+                    colors.push({
+                        value: variant.id,
+                        title: variant.color,
+                        code: variant.colorCode,
+                        code2: variant.colorCode2,
+                        hasStock: variant.hasStock
+                    });
+                }
+            }
+
+            if (colors.length === 0)
+            {
+                return false;
+            }
+
+            var colorLabel;
+
+            if (colorCode && colors.length > 1)
+            {
+                colorDropdown = $('<div>', { 'class': 'colorSelector margin-bottom-10 clearfix', html:[
+                    $('<label>', { html:
+                        [
+                            'Color ',
+                            colorLabel = $('<b>'),
+                            $('<div>', {
+                                'class' : 'outstock-badge margin-left-5',
+                                'data-toggle' : 'tooltip',
+                                'data-placement' : 'top',
+                                'data-original-title' : dlang('products', 'Temporarily out of stock at our supplier'),
+                                'style' : 'display:none',
+                                html: dlang('products', 'OUT OF STOCK')
+                            }).tooltip()
+                        ]
+                    }),
+                    $('<div>', {
+                        'class':'colorContainer',
+                        'style': 'display: inline-block'
+                    })
+                ]});
+
+                for (var i in colors)
+                {
+                    var color = colors[i];
+                    var colorDom = $('<span>', {
+                        'data-id': color.value,
+                        'data-title': color.title,
+                        'data-stock': color.hasStock,
+                        style: 'background-color:' + color.code
+                    });
+
+                    if (color.code2)
+                    {
+                        colorDom.append($('<span>', {
+                            style: 'background-color:' + color.code2
+                        }));
+                    }
+
+                    colorDom.appendTo(colorDropdown.find('div.colorContainer'));
+                }
+
+                colorDropdown.appendTo(this.variantArea);
+                colorDropdown.find('span').on('click', this, function (e)
+                {
+                    var variant = $(this).data('id');
+                    $(this).parent().find('.active').removeClass('active');
+                    $(this).addClass('active');
+                    e.data.selectVariant(variant);
+                    e.data.fileArea.find('img:not(.img-preview)').css('backgroundColor', $(this).css('backgroundColor'));
+                    e.data.selection.color = $(this).data('title');
+                    e.data.selection.stock = $(this).data('stock');
+
+                    $('.outstock-badge').hide();
+
+                    if (e.data.selection.stock !== null)
+                    {
+                        if(e.data.selection.stock == false)
+                        {
+                            $('.outstock-badge').show();
+                        }
+                    }
+
+                    colorLabel.text(e.data.selection.color !== '' ? ' - ' + e.data.selection.color : '');
+                    colorDropdown.find('div').tooltip('hide');
+                    e.data.markComplete();
+                })
+                    .on('mouseover', this, function ()
+                    {
+                        colorLabel.text(' - ' + $(this).data('title'));
+
+                        $('.outstock-badge').hide();
+
+                        if ($(this).data('stock') !== null)
+                        {
+                            if (!$(this).data('stock'))
+                            {
+                                $('.outstock-badge').show();
+                            }
+                        }
+                    })
+                    .on('mouseout', this, function (e)
+                    {
+                        if (e.data.selection.color && colorDropdown.find('span[data-title="' + e.data.selection.color+'"]').length > 0)
+                        {
+                            colorLabel.text(' - '+e.data.selection.color);
+                        }
+                        else
+                        {
+                            colorLabel.text('');
+                        }
+
+                        $('.outstock-badge').hide();
+                        if(e.data.selection.stock == false)
+                        {
+                            $('.outstock-badge').show();
+                        }
+                    });
+
+                if (this.selection.color)
+                {
+                    if(colorDropdown.find('span[data-title="' + this.selection.color + '"]').length)
+                    {
+                        colorDropdown.find('span[data-title="' + this.selection.color + '"]').click();
+                    }
+                    else
+                    {
+                        this.selection.color = null;
+                    }
+                }
+                else
+                {
+                    if (this.par.tooltips && !PF.Utils.isTouch())
+                    {
+                        this.addTooltip(
+                            colorDropdown.find('div'), 'top', 'manual', dlang('products', 'Select color')
+                        );
+
+                        colorDropdown.find('div').tooltip('show');
+                    }
+                }
+            }
+            else
+            {
+                colorDropdown = this.createDropdown(colors, 'Color').appendTo(this.variantArea);
+                colorDropdown.find('select').on('change', this, function (e)
+                {
+                    var variant = $(this).val();
+                    e.data.selectVariant(variant);
+                    e.data.selection.color = $(this).find("option:selected").data('text');
+                    e.data.markComplete();
+                });
+
+                this.autoSelectValue(colorDropdown, 'color');
+            }
+        }, this);
+
+        if (size || name)
+        {
+            var list    = [];
+            var stored  = {};
+            var field   = size ? 'size' : 'name';
+
+            for (var i in variants)
+            {
+                var variant = variants[i];
+                if (!stored[variant[field]])
+                {
+                    var id = color ? variant[field] : variant.id;
+                    list.push({
+                        value: id,
+                        title: variant[field]
+                    });
+                    stored[variant[field]] = 1;
+                }
+            }
+
+            sizeDropdown = this.createDropdown(list, size ? dlang('products', 'Size') : dlang('products', 'Variant')).appendTo(this.variantArea);
+            sizeDropdown.find('select').on('change', this, function (e)
+            {
+                e.data.selection[field] = $(this).find("option:selected").data('text');
+                var val = $(this).val();
+                if (color)
+                {
+                    showColors(val);
+                }
+                else
+                {
+                    e.data.selectVariant(val);
+                }
+
+                sizeDropdown.find('span').tooltip('hide');
+                e.data.markComplete();
+            });
+
+            if (typeof this.selection[field] == 'undefined')
+            {
+                if (this.par.tooltips)
+                {
+                    this.addTooltip(
+                        sizeDropdown.find('span'), 'top', 'manual', dlang('products', 'Select size')
+                    );
+
+                    sizeDropdown.find('span').tooltip('show');
+                }
+            }
+
+            this.autoSelectValue(sizeDropdown, field);
+        }
+        else if (color)
+        {
+            showColors(null);
+        }
+    },
+    initData: function ()
+    {
+        var data = this.par.data;
+
+        this.selection.type = data.product.type;
+        this.selection.brand = data.product.brand;
+        this.selection.model = data.product.model || data.product.title;
+        this.selection.size = data.variant.size;
+        this.selection.color = data.variant.color;
+
+        if(data.product.categories)
+        {
+            this.selection.category = data.product.categories[0];
+        }
+        else
+        {
+            this.selection.category = false;
+        }
+
+        if (data.options)
+        {
+            this.options = $.extend({}, data.options);
+        }
+
+        if (data.files)
+        {
+            this.files = $.extend({}, data.files);
+        }
+    },
+    selectVariant: function (id)
+    {
+        this.variant = null;
+
+        if (this.product && id)
+        {
+            var variants = this.variantCache[this.product.id];
+            for (var i in variants)
+            {
+                if (variants[i].id == id)
+                {
+                    this.variant = variants[i];
+                }
+            }
+        }
+
+        this.checkStatus();
+    },
+    showFiles: function ()
+    {
+        if (this.product.files)
+        {
+            $('<div/>', {'class' : 'alert alert-warning', html: [
+                $('<strong/>', { html: dlang('products', 'Not sure your print file is correct?') }),
+                $('<a/>', { href: (this.par.screenmode ? '/files/SP_Guidelines_4.pdf' : langUrl('/product/' + this.product.id)), target: '_blank', html: dlang('products', 'See our print file guidelines') })
+            ]}).appendTo(this.fileArea);
+
+            this.fileAreaInner = $('<div/>', {
+                'style': 'float:left;'
+            }).appendTo(this.fileArea);
+
+            this.fileSelectors = {};
+            for (var type in this.product.files)
+            {
+                this.createFileSelect(type, this.product.files[type], this.product);
+            }
+
+            $('<div/>', {
+                class: 'padding-top-15 hidden',
+                id: 'files-error-alert',
+                style: 'clear:both;margin-right:8px;',
+                html: [
+                    $('<div/>', {
+                        class: 'alert alert-danger text-center padding-vertical-10 padding-horizontal-15',
+                        text: dlang('products', 'Please upload a print file to continue')
+                    })
+                ]
+            }).appendTo(this.fileAreaInner);
+        }
+    },
+
+    showOptions: PF.OrderVariantPicker.showOptions,
+
+    showPickerFiles: PF.OrderVariantPicker.showFiles,
+
+    createFileSelect: PF.OrderVariantPicker.createFileSelect,
+
+    createDropdown: function (values, label, no_wrap)
+    {
+        var dropdown = $('<select/>', { 'data-label': label });
+        dropdown.append($('<option>', { text: '- Choose -', value: '' }));
+
+        var groups = {};
+
+        for (var i in values)
+        {
+            if (typeof values[i] !== 'object')
+            {
+                dropdown.append($('<option>', {
+                    text: values[i],
+                    value: i,
+                    'data-text': values[i]
+                }));
+            }
+            else
+            {
+                var value = values[i];
+                var option = $('<option>', {
+                    value: value.value,
+                    'data-text': value.title,
+                    text: value.title
+                });
+
+                if (value.group)
+                {
+                    if (!groups[value.group])
+                    {
+                        groups[value.group] = $('<optgroup>', {label: value.group}).appendTo(dropdown);
+                    }
+                    groups[value.group].append(option);
+                }
+                else
+                {
+                    dropdown.append(option);
+                }
+            }
+        }
+
+        var label = $('<label>', {
+            class: label.toLowerCase() + '-select',
+            text: label
+        });
+        if (!no_wrap)
+        {
+            $('<span/>', {
+                'class': 'styled-select margin-bottom-10',
+                html: dropdown
+            }).appendTo(label);
+        }
+        else
+        {
+            label.append(dropdown);
+        }
+        return label;
+    },
+    autoSelectValue: function (dropdown, attr)
+    {
+        var select = dropdown.find('select');
+        var selected;
+        var value = this.selection[attr];
+        var count = 0;
+        var last;
+
+        if (!value)
+        {
+            value = '';
+        }
+
+        select.find('option').each(function (e)
+        {
+            if (this.value !== '')
+            {
+                count++;
+                last = this.value;
+            }
+
+            if ($(this).data('text') == value)
+            {
+                selected = this.value;
+            }
+        });
+
+        if (last && count == 1)
+        {
+            selected = last;
+        }
+
+        if (selected)
+        {
+            select.val(selected);
+            select.change();
+        }
+        else
+        {
+            this.selection[attr] = null;
+        }
+    },
+    checkStatus: function ()
+    {
+        if (this.variant)
+        {
+            if (this.variant.image)
+            {
+                this.previewImage.attr('src', this.variant.image).show();
+                this.noPreview.hide();
+            }
+            else
+            {
+                this.noPreview.show();
+                this.previewImage.hide();
+            }
+        }
+        else if (this.product)
+        {
+            if (this.product.image)
+            {
+                this.previewImage.attr('src', this.product.image).show();
+                this.noPreview.hide();
+            }
+            else
+            {
+                this.noPreview.show();
+                this.previewImage.hide();
+            }
+        }
+        else
+        {
+            this.noPreview.hide();
+            this.previewImage.hide();
+        }
+
+        var hasFiles = true;
+        if (this.par.files && this.product)
+        {
+            var files = {};
+            for (var type in this.product.files)
+            {
+                if (this.files[type])
+                {
+                    files[type] = this.files[type];
+                }
+            }
+
+            if (this.par.screenmode)
+            {
+                if (this.optionBoxes['front_colors'])
+                {
+                    this.optionBoxes['front_colors'].toggle(files.file ? true : false);
+                    if (!files.file)
+                    {
+                        this.options['front_colors'] = [];
+                    }
+                }
+
+                if (this.optionBoxes['back_colors'])
+                {
+                    this.optionBoxes['back_colors'].toggle(files.file2 ? true : false);
+                    if (!files.file2)
+                    {
+                        this.options['back_colors'] = [];
+                    }
+                }
+
+                if (this.optionBoxes['label_colors'])
+                {
+                    this.optionBoxes['label_colors'].toggle(files.file3 ? true : false);
+                    if (!files.file3)
+                    {
+                        this.options['label_colors'] = [];
+                    }
+                }
+            }
+
+            if (typeof this.product.files.file3 !== 'undefined' && this.product.files.file3.title == dlang('products', 'Outside label'))
+            {
+                var dom2 = this.fileSelectors['file2'];
+                var dom3 = this.fileSelectors['file3'];
+                if (dom2 && dom3)
+                {
+                    if (files.file2)
+                    {
+                        dom2.show();
+                        dom3.hide();
+                        delete files.file3;
+                    }
+                    else if (files.file3)
+                    {
+                        dom2.hide();
+                        dom3.show();
+                    }
+                    else
+                    {
+                        dom2.show();
+                        dom3.show();
+                    }
+                }
+            }
+
+            if (!files.file && !files.file2)
+            {
+                hasFiles = false;
+            }
+
+            this.files = files;
+
+            for (var i in this.fileSelectors)
+            {
+                this.fileSelectors[i].find('.fileImage').attr('data-status', null);
+            }
+
+            if (this.variant)
+            {
+                var check = {
+                    files: {},
+                    variant_id: this.variant.id
+                };
+
+                for (var i in this.files)
+                {
+                    if (i != 'preview')
+                    {
+                        check.files[i] = this.files[i].id;
+                    }
+                }
+
+                if (!hasFiles) {
+                    this.error = dlang('products', 'Please select print file!');
+                }
+            }
+        }
+
+        this.price = 0;
+        this.error = false;
+
+        if (!this.variant)
+        {
+            var that = this;
+            $(this.dom).find('select').each(function ()
+            {
+                var label = $(this).data('label');
+                if ($(this).val() === '' && label)
+                {
+                    that.error = dlang('products', 'Please select {label}!').replace('{label}', label.toLowerCase());
+                }
+            });
+
+            if ($(this.dom).find('.colorSelector').length > 0)
+            {
+                that.error = dlang('products', 'Please select color!');
+            }
+        }
+
+        if (this.variant && hasFiles)
+        {
+            this.submitButton.removeClass('disabled');
+
+            if (this.par.tooltips)
+            {
+                this.addTooltip(
+                    this.submitButton, 'right', 'manual', dlang('products', 'All set')
+                );
+                this.submitButton.tooltip('show');
+            }
+
+            return true;
+        }
+        else
+        {
+            this.submitButton.addClass('disabled');
+            this.submitButton.tooltip('hide');
+        }
+    },
+    markComplete: function()
+    {
+        if (typeof this.selection.type != "undefined")
+        {
+            this.typeSelector.addClass('complete');
+        }
+        else
+        {
+            this.typeSelector.removeClass('complete');
+        }
+
+        if (this.selection.brand)
+        {
+            $('.brand-select').addClass('complete');
+        }
+        else
+        {
+            $('.brand-select').removeClass('complete');
+        }
+
+        if (this.selection.model)
+        {
+            $('.model-select').addClass('complete');
+        }
+        else
+        {
+            $('.model-select').removeClass('complete');
+        }
+
+        if (this.selection.size)
+        {
+            $('.size-select').addClass('complete');
+        }
+        else
+        {
+            $('.size-select').removeClass('complete');
+        }
+
+        if (this.selection.color)
+        {
+            $('.color-select').addClass('complete');
+            this.variantArea.find('.colorSelector').addClass('complete');
+        }
+        else
+        {
+            $('.color-select').removeClass('complete');
+            this.variantArea.find('.colorSelector').removeClass('complete');
+        }
+
+        if (this.files['file'])
+        {
+            $('.file-file').addClass('complete');
+        }
+        else
+        {
+            $('.file-file').removeClass('complete');
+        }
+    },
+    getTooltip: function (data)
+    {
+        var tooltip = false;
+        if (data.status == 'ok')
+        {
+            tooltip = dlang('products', 'Great, the file seems to match guidelines.');
+        }
+        else if (data.status == 'invalid')
+        {
+            tooltip = dlang('products', 'This file does not match the guidelines:');
+        }
+        else if (data.status == 'warning')
+        {
+            tooltip = dlang('products', 'There might be a problem with this file:');
+        }
+
+        if (tooltip)
+        {
+            if (data.errors)
+            {
+                tooltip += '<br />' + data.errors.join('<br />');
+            }
+            tooltip = '<div class="text-left">'+tooltip+'</div>';
+        }
+
+        return tooltip;
+    },
+    submit: function ()
+    {
+        if ( this.submitButton.hasClass('disabled'))
+        {
+            $('#files-error-alert').removeClass('hidden');
+            if (this.error)
+            {
+                alert(this.error);
+            }
+
+            return false;
+        }
+        var data = this.par.data;
+            data.variant = this.variant;
+            data.product = this.product;
+            data.price = this.price;
+            data.files = this.files;
+            data.options = this.options;
+        this.callback(data);
+        $('.bs-modal-lg').modal('hide');
+        return false;
+    },
+
+    prepareText: function(data)
+    {
+        var text = data.variant.info.replace(/\n/g, '<br />');
+        for (var option in data.product.options)
+        {
+            var optionData = data.product.options[option];
+            if (typeof data.options[option] !='undefined')
+            {
+                var value = data.options[option];
+                var title = false;
+                switch (optionData.type)
+                {
+                    case 'bool':
+                        title = (value ? lang('Yes') : lang('No'));
+                        break;
+                    case 'radio':
+                    case 'select':
+                        title = (optionData.values[value]);
+                        break;
+                    case 'multi_select':
+                        if (option.indexOf('thread_color') === 0 && value.length)
+                        {
+                            var div = $('<div>', {'class': 'colorSelector clearfix'});
+                            for (var i in value)
+                            {
+                                var color = value[i];
+                                $('<span>', {
+                                     style: 'background-color:' + color
+                                }).appendTo(div);
+                            }
+                            title = div[0].outerHTML;
+                        }
+                        break;
+                }
+                if (title)
+                {
+                    text += '<div>' + optionData.title + ': ' + title + '</div>';
+                }
+            }
+        }
+        return text;
+    },
+
+    addTooltip: function(elem, placement, trigger, text)
+    {
+        elem.attr({
+            'data-toggle': 'tooltip',
+            'data-placement': placement,
+            'data-trigger': trigger,
+            'data-original-title': text
+        });
+
+        elem.tooltip({ html: true});
+    }
+};

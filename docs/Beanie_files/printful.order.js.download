@@ -1,0 +1,669 @@
+var PF = PF || (window ? window.PF : {}) || {};
+
+(function () {
+    'use strict';
+
+    PF.Order = Class({
+        __NAME: 'PF.Order',
+
+        id: null,
+        store: null,
+        items: null,
+        isScreenprint: null,
+        tooltips: null,
+        isNewOrderFlow: null,
+        isForWarehouse: null,
+        previouslySavedData: null,
+        maxid: 0,
+        rows: null,
+        _keyUpTimeoutId: 0,
+
+        /**
+         * @param {Object} par
+         * @param {Number} par.id
+         * @param {Number} par.store
+         * @param {Array} par.items
+         * @param {Number} par.isScreenprint
+         * @param {Boolean} par.tooltips
+         * @param {Boolean} par.isNewOrderFlow
+         * @param {Number} par.isForWarehouse
+         * @constructor
+         * @private
+         */
+        __construct: function (par) {
+            this.id = par.id;
+            this.store = par.store;
+            this.items = par.items;
+            this.isScreenprint = par.isScreenprint || 0;
+            this.tooltips = par.tooltips || 0;
+            this.isNewOrderFlow = par.isNewOrderFlow;
+            this.isForWarehouse = par.isForWarehouse;
+            this.rows = [];
+
+            this.node = tag('div', '', [
+                tag('div', 'white-block pf-px-12 pf-py-24 pf-p-sm-32 pf-mb-16', [
+                    this._nodeTitle = tag('h3', 'pf-mt-0 pf-mb-12 text-center pf-px-24 pf-px-sm-0', [dlang('dashboard', 'Click "Add Product" to start your order')]),
+                    this._nodeTable = tag('table', 'order-item-table no-products', [
+                        this._nodeTableHead = tag('thead', 'hidden', !this.isScreenprint ? [
+                            tag('tr', '', [
+                                tag('th', {
+                                    prop: {
+                                        colspan: 2,
+                                    }
+                                }, ['Product']),
+                                tag('th', {
+                                    prop: {
+                                        width: 230,
+                                    }
+                                }, [
+                                    'Printfiles',
+                                    tag('span', {
+                                        className: 'glyphicon glyphicon-info-sign',
+                                        prop: {
+                                            'data-toggle': 'tooltip-delay',
+                                            'data-placement': 'top',
+                                            title: dlang('dashboard', 'Need help? <a href="{url}" target="_blank">See our guidelines</a>').replace('{url}', langUrl('/custom/clothing-apparel/guidelines')),
+                                        }
+                                    })
+                                ]),
+                                tag('th', {
+                                    prop: {
+                                        width: 80,
+                                    }
+                                }, ['Qty']),
+                                tag('th', {
+                                    prop: {
+                                        width: 70,
+                                    }
+                                }, ['Price']),
+                                tag('th', {
+                                    prop: {
+                                        width: 100,
+                                    }
+                                }, [
+                                    'Retail',
+                                    tag('span', {
+                                        className: 'glyphicon glyphicon-info-sign',
+                                        prop: {
+                                            'data-toggle': 'tooltip-delay',
+                                            'data-placement': 'top',
+                                            title: dlang('dashboard', 'What\'s <a href="{url}" target="_blank">retail price?</a>').replace('{url}', langUrl('/faq/pricing-fees/52')),
+                                        }
+                                    })
+                                ]),
+                                tag('th', {
+                                    prop: {
+                                        width: 70,
+                                    }
+                                }, ['Remove']),
+                            ])
+                        ] : null),
+                        this._nodeTableBody = tag('tbody'),
+                        tag('tfoot', '', [
+                            tag('tr', '', [
+                                tag('td', {
+                                    attr: {
+                                        colspan: 10,
+                                    }
+                                }, [
+                                    tag('a', {
+                                        className: 'btn btn-primary btn-lg btn-arrow pf-mt-12',
+                                        href: 'javascript:;',
+                                        onclick: this.showProductDialog.bind(this),
+                                    }, [
+                                        tag('span', 'arrow hidden-xs'),
+                                        dlang('dashboard', 'Add product'),
+                                    ])
+                                ]),
+                                !this.isScreenprint ? tag('td', '', [
+                                    tag('h4', {
+                                        className: 'regular',
+                                        id: 'totalSum',
+                                    })
+                                ]) : '',
+                                !this.isScreenprint ? tag('td') : '',
+                            ])
+                        ])
+                    ]),
+                ]),
+                this._nodeWarehouseBox = tag('div', 'white-block pf-px-12 pf-py-24 pf-p-sm-32 pf-mb-16 hidden', [
+                   tag('div', 'checkbox', [
+                       tag('label', '', [
+                           tag('input', {
+                               type: 'checkbox',
+                               name: 'for_warehouse',
+                               id: 'forWarehouseCheckbox',
+                               value: this.isForWarehouse,
+                               prop: {
+                                   checked: this.isForWarehouse,
+                               },
+                               onclick: function (e) {
+                                   var storeInWarehouse = e.target.checked ? 1 : 0;
+                                   e.target.value = storeInWarehouse;
+                                   this.isForWarehouse = storeInWarehouse;
+                                   this.reloadContinueButton();
+                               }.bind(this),
+                           }),
+                           'Stock items at the printful warehouse (NC) - ',
+                           tag('a', {
+                               href: '/dashboard/warehouse'
+                           }, ['click here']),
+                           ' for more info & pricing ',
+                           tag('span', 'label label-danger', ['New']),
+                       ])
+                   ])
+                ]),
+                this._nodeSubmitBox = tag('div', 'white-block pf-px-12 pf-py-24 pf-p-sm-32 pf-mb-16 hidden', [
+                    tag('div', 'row', [
+                        this._nodeSummary = tag('div', 'col-md-6 offset-md-3'),
+                        tag('div', 'col-sm-12 col-md-8 offset-md-2 text-center pf-mt-0 pf-mt-sm-24', [
+                            this._nodeSubmit = tag('input', {
+                                className: 'btn btn-danger btn-lg btn-block pf-px-4',
+                                type: 'submit',
+                                value: 'Continue to ' + (this.isForWarehouse ? 'review' : 'shipping') + '',
+                            })
+                        ])
+                    ])
+                ])
+            ]);
+
+            for (var i in this.items) {
+                this.productAddCallback(this.items[i], true);
+            }
+
+            var hasItems = this.items.length > 0;
+
+            this.toggleWarehouseOption(hasItems);
+
+            this.validateRows();
+
+            this.autoSave();
+
+            $('#orderCreate').on('submit', function (e)  {
+                if (this.validateRows()) {
+                    PF.FormOverlay.show();
+                    return true;
+                }
+                return false;
+            }.bind(this));
+
+            this.reloadSummary();
+        },
+
+        /**
+         * Validate order rows
+         * @return {Boolean}
+         */
+        validateRows: function () {
+            var total = 0;
+            var count = 0;
+            var quantity = 0;
+
+            for (var i in this.rows) {
+                var row = this.rows[i];
+                var sum = (row.data.price).toFixed(2);
+
+                if (this.isScreenprint) {
+                    $(row.sizeCell).find('input[type="text"]').each(function () {
+                        quantity += $(this).val() * 1;
+                    });
+                } else {
+                    mkE.setNodeText(row.priceCell, '$' + sum);
+                    row.externalPriceBox.setAttribute('placeholder', sum);
+                    total += sum * row.data.quantity;
+                    quantity += row.data.quantity;
+                }
+
+                count++;
+
+                if (this.isScreenprint) {
+                    if (Object.keys(this.rows).length === 1 && !quantity) {
+                        setTimeout(function (row) {
+                            $(row.sizeCell)
+                                .find('div')
+                                .first()
+                                .attr({
+                                    'data-trigger': 'manual',
+                                    'data-toggle' : 'tooltip',
+                                    'data-placement' : 'auto top',
+                                    'data-container' : 'body',
+                                    'data-original-title' : 'Enter quantity to continue'
+                                })
+                                .tooltip('show');
+                        }.bind(this, row), 1000);
+                    } else {
+                        $(row.sizeCell)
+                            .find('div')
+                            .first()
+                            .tooltip('hide');
+                    }
+                }
+            }
+
+            this.autoSave(true);
+
+            if (count > 0) {
+                mkE.removeClassName(this._nodeTableHead, 'hidden');
+            } else {
+                mkE.addClassName(this._nodeTableHead, 'hidden');
+            }
+            var valid = count > 0 && quantity > 0;
+            if (valid) {
+                mkE.removeClassName(this._nodeSubmitBox, 'hidden');
+            } else {
+                mkE.addClassName(this._nodeSubmitBox, 'hidden');
+            }
+
+            this.toggleWarehouseOption(valid);
+
+            return valid;
+        },
+
+        /**
+         * Auto save order
+         * @param {Boolean} [force]
+         */
+        autoSave: function (force) {
+            if (force) {
+                this.saveData();
+                return;
+            }
+
+            setInterval(function () {
+                if (document.hasFocus()) {
+                    this.saveData();
+                }
+            }.bind(this), 5000);
+        },
+
+        /**
+         * Save order data
+         */
+        saveData: function () {
+            var data = $('#orderCreate').serialize();
+
+            if (this.previouslySavedData === data) {
+                return;
+            }
+            this.previouslySavedData = data;
+            $.post('/dashboard/order/save?id=' + this.id + '&store=' + this.store, data, function () {
+                this.reloadSummary();
+            }.bind(this));
+            this.reloadContinueButton();
+        },
+
+        /**
+         * Toggle warehouse option visibility
+         * @param {Boolean} visible
+         */
+        toggleWarehouseOption: function (visible) {
+            visible = visible || false;
+            if (visible) {
+                mkE.removeClassName(this._nodeWarehouseBox, 'hidden');
+            } else {
+                mkE.addClassName(this._nodeWarehouseBox, 'hidden');
+            }
+        },
+
+        showProductDialog: function () {
+            PF.ProductSelector.show({
+                title: dlang('dashboard', 'Add product'),
+                files: true,
+                store: this.store,
+                screenmode: this.isScreenprint,
+                tooltips: this.tooltips
+            }, this.productAddCallback.bind(this));
+
+            this.tooltips = false;
+
+            return false;
+        },
+
+        /**
+         *
+         * @param {{}} data
+         * @param {Boolean} noValidate
+         */
+        productAddCallback: function (data, noValidate) {
+            var row;
+            if (data.id && this.rows[data.id]) {
+                row = this.rows[data.id];
+            } else {
+                row = this.createRow();
+                data.id = row.id;
+                if (!data.quantity) {
+                    data.quantity = [];
+                }
+            }
+
+            row.productCell.innerHTML = PF.ProductSelector.prepareText(data);
+
+            if (data.variant.image) {
+                row.productImage.src = data.variant.image;
+                mkE.removeClassName(row.productImage, 'hidden');
+            } else {
+                mkE.addClassName(row.productImage, 'hidden');
+            }
+
+            if (this.isScreenprint) {
+                var ids;
+                var sizes;
+
+                if (typeof data.variant.id !== 'number') {
+                    ids = (data.variant.id).split(',');
+                    sizes = (data.variant.size).split(',');
+                } else {
+                    ids = [data.variant.id];
+                    sizes = [data.variant.size];
+                }
+
+                mkE.clearNode(row.sizeCell);
+
+                for (var i in sizes) {
+                    data.line_id = data.line_id || [];
+                    data.quantity = data.quantity || [];
+
+                    if (typeof data.line_id[i] !== 'number') {
+                        data.line_id[i] = 0;
+                    }
+
+                    var variant_id = ids[i];
+
+                    tag('div', {
+                        className: 'pf-mr-8 pf-mb-4 text-center',
+                        style: 'display:inline-block;',
+                    }, [
+                        tag('label', 'pf-m-0', [sizes[i]]),
+                        tag('input', {
+                            type: 'text',
+                            placeholder: 0,
+                            name: 'item[' + row.id + '][variants][' + variant_id + '][quantity]',
+                            prop: {
+                                onkeyup: this.onQuantitySizeKeyUp.bind(this, variant_id, data),
+                            }
+                        }),
+                        tag('input', {
+                            type: 'hidden',
+                            value: data.line_id[i],
+                            name: 'item[' + row.id + '][variants][' + variant_id + '][id]'
+                        })
+                    ]).append(row.sizeCell);
+                }
+
+                for (i in data.quantity) {
+                    $(row.sizeCell).find('input[name="item[' + row.id + '][variants][' + i + '][quantity]"]').val(data.quantity[i]);
+                }
+            } else {
+                if (data.line_id) {
+                    tag('input', {
+                        type: 'hidden',
+                        name: 'item[' + row.id + '][id]',
+                        value: data.line_id
+                    }).append(row.productCell);
+                }
+
+                row.quantityBox.value = data.quantity;
+                row.productField.value = data.variant.id;
+
+                if (data.external_price > 0) {
+                    row.externalPriceBox.value = (data.external_price).toFixed(2);
+                }
+            }
+
+            tag('input', {
+                type: 'hidden',
+                name: 'item[' + row.id + '][options]',
+                value: JSON.stringify(data.options)
+            }).append(row.productCell);
+
+            row.data = data;
+            mkE.clearNode(row.fileCell);
+
+            if (typeof data.editable !== 'undefined' && !data.editable) {
+                row.quantityBox.setAttribute('disabled', 'disabled');
+                row.productField.setAttribute('disabled', 'disabled');
+                row.productImage.setAttribute('disabled', 'disabled');
+                row.editLink.remove();
+                row.deleteLink.remove();
+            }
+
+            for (var type in data.files) {
+                this.addFile(row, type, data.files[type]);
+            }
+
+            if (!noValidate) {
+                this.validateRows();
+            }
+
+            mkE.addClassName(this._nodeTitle, 'hidden');
+            mkE.removeClassName(this._nodeTable, 'no-products');
+
+            this.toggleWarehouseOption(true);
+        },
+
+        /**
+         * @param {Number} variantId
+         * @param {{}} data
+         * @param {Event} event
+         * @returns {Boolean}
+         */
+        onQuantitySizeKeyUp: function (variantId, data, event) {
+            window.clearTimeout(this._keyUpTimeoutId);
+            this._keyUpTimeoutId = window.setTimeout(this.validateRows.bind(this), 500);
+
+            var q = parseInt(event.target.value, 10);
+            if (isNaN(q) || q < 0 || q > 1000) {
+                return false;
+            }
+
+            data.quantity[variantId] = q;
+            this.rows[data.id].data.quantity[variantId] = q;
+        },
+
+        /**
+         *
+         * @param {{}} row
+         * @param {String} type
+         * @param {{}} data
+         */
+        addFile: function (row, type, data) {
+            if (row.data.product && row.data.product.files[type]) {
+                var filedata = row.data.product.files[type];
+
+                var img = tag('div', 'printfile-thumb status-' + data.status + '', [
+                    tag('div', {
+                        className: 'printfile-thumb__img',
+                        style: {
+                            backgroundColor: (row.data.variant.colorCode && type !== 'preview' ? row.data.variant.colorCode : '#efefef'),
+                            backgroundImage: 'url(' + data.thumb + ')',
+                        },
+                        prop: {
+                            onclick: function (e) {
+                                row.editLink.click();
+                            }
+                        }
+                    }),
+                    tag('div', 'printfile-thumb__title', [filedata.title]),
+                ]);
+
+                img.append(row.fileCell);
+
+                var tooltip = PF.ProductSelector.getTooltip(data);
+                if (tooltip) {
+                    $(img).tooltip({ html: true, title: tooltip });
+                }
+
+                tag('input', {
+                    type: 'hidden',
+                    name: 'item[' + row.id + ']' + (this.isScreenprint ? '[files]' : '') + '[' + type + ']',
+                    value: data.id
+                }).append(row.fileCell);
+            }
+        },
+
+        createRow: function () {
+            var row = {};
+            this.maxid++;
+            row.id = this.maxid;
+            this.rows[row.id] = row;
+
+            row.dom = tag('tr', '', [
+                tag('td', 'product-image col-sm-3', [
+                    row.productImage = tag('img', 'img-responsive hidden'),
+                ]),
+                tag('td', {
+                    className: 'product-title',
+                    prop: {
+                        width: this.isScreenprint ? 230 : 250,
+                    }
+                }, [
+                    row.productCell = tag('div'),
+                    row.editLink = tag('a', {
+                        href: '#',
+                        onclick: function () {
+                            if (this.isNewOrderFlow) {
+                                // The new order flow
+                                PF.OrderFlow.editVariant({ // TODO: Is this correct/used anywhere?
+                                    title : 'Edit product',
+                                    files : true,
+                                    store : this.store,
+                                    screenmode : this.isScreenprint,
+                                    tooltips : this.tooltips,
+                                    data : row.data,
+                                    productId : row.data.product.id
+                                });
+                            } else {
+                                // The old order flow, this is here for option to revert quickly, if all goes bad
+                                PF.ProductSelector.show({
+                                    title:'Edit product',
+                                    files:true,
+                                    store: this.store,
+                                    screenmode: this.isScreenprint,
+                                    tooltips: this.tooltips,
+                                    data: row.data
+                                }, this.productAddCallback.bind(this));
+                                return false;
+                            }
+                            return false;
+                        }.bind(this),
+                    }, ['Edit']),
+                ]),
+                row.fileCell = tag('td', {
+                    className: 'product-print-files ' + (!this.isScreenprint ? 'hidden' : ''),
+                    prop: {
+                        width: 220,
+                    },
+                }),
+                row.sizeCell = tag('td', {
+                    className: 'product-sizes ' + (!this.isScreenprint ? 'hidden' : ''),
+                    prop: {
+                        width: 360,
+                    },
+                }),
+                tag('td', {
+                    className: this.isScreenprint ? 'hidden' : '',
+                    prop: {
+                        align: this.isScreenprint ? 'center' : '',
+                    },
+                }, !this.isScreenprint ? [
+                    row.quantityBox = tag('input', {
+                        className: 'quantity',
+                        type: 'text',
+                        name: 'item['+row.id+'][quantity]',
+                    }),
+                    row.productField = tag('input', {
+                        type: 'hidden',
+                        name: 'item[' + row.id + '][product_id]'
+                    })
+                ] : null),
+                tag('td', this.isScreenprint ? 'hidden' : '', [
+                    row.priceCell = tag('h4', 'pf-mb-0 pf-mt-4 regular'),
+                ]),
+                tag('td', this.isScreenprint ? 'hidden' : '', [
+                    tag('span', '' ['$']),
+                    row.externalPriceBox = tag('input', {
+                        style: 'width:80px;margin-left:5px;',
+                        type: 'text',
+                        name: 'item[' + row.id + '][external_price]',
+                    })
+                ]),
+                tag('td', 'product-action', [
+                    row.deleteLink = tag('a', {
+                        className: 'action',
+                        href: '#',
+                        onclick: function () {
+                            this.deleteRow(row.id);
+                            return false;
+                        }.bind(this),
+                    }, ['Remove']),
+                ])
+            ]);
+
+            if (!this.isScreenprint) {
+                row.quantityBox
+                    .on('keyup', function (e) {
+                        var q = parseInt(e.target.value);
+                        if (isNaN(q) || q < 0 || q > 1000) {
+                            return false;
+                        }
+                        row.data.quantity = q;
+                        this.validateRows();
+                    }.bind(this))
+                    .on('change', function (e) {
+                        var q = parseInt(e.target.value);
+                        if (isNaN(q) || q < 0 || q > 1000) {
+                            q = 1;
+                        }
+                        e.target.value = q;
+                        row.data.quantity = q;
+                        this.validateRows();
+                    }.bind(this));
+            }
+
+            row.dom.append(this._nodeTableBody);
+
+            return row;
+        },
+
+        deleteRow: function (id) {
+            var row = this.rows[id];
+            row.dom.remove();
+            delete this.rows[id];
+            this.validateRows();
+
+            if (!Object.keys(this.rows).length) {
+                mkE.removeClassName(this._nodeTitle, 'hidden');
+                mkE.addClassName(this._nodeTable, 'no-products');
+            }
+        },
+
+        reloadSummary: function () {
+            var orderId = $(this._nodeSummary).closest('form').data('order-id');
+
+            PF.LoadingOverlay.show(this._nodeSummary);
+
+            $.post('/dashboard/order/widget?type=summary&id=' + orderId + PF.Repositories.OrderRepository.getRef('&'), {}, function (data) {
+                PF.LoadingOverlay.hide(this._nodeSummary);
+                this._nodeSummary.innerHTML = data.content;
+                if ($('#walletStatus').length > 0) {
+                    PF.PaymentForm.setAmount(data.amount);
+                }
+            }.bind(this), 'json');
+        },
+
+        reloadContinueButton: function () {
+            if (this.isForWarehouse === null) {
+                return;
+            }
+            var text = 'Continue';
+            if (this.isForWarehouse === 1) {
+                text = 'Continue to review';
+            }
+            if (this.isForWarehouse === 0) {
+                text = 'Continue to shipping';
+            }
+            this._nodeSubmit.value = text;
+        },
+    }, mkE.Base);
+
+})();
